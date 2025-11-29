@@ -8,9 +8,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Run checks only on PRs (not on push to master)
   check:
     name: Check
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
       
@@ -42,3 +44,122 @@ jobs:
       - name: Run tests
         run: cargo test
         continue-on-error: true
+
+  # Build binaries (only on regular pushes, skip release-please version commits)
+  build:
+    name: Build (${{ matrix.os }})
+    if: "${{ github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'chore(master)') }}"
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+        continue-on-error: true
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+        continue-on-error: true
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Run tests
+        run: cargo test --release
+        continue-on-error: true
+
+      - name: Prepare artifact (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p dist
+          cp target/release/${{ matrix.artifact_name }} dist/${{ matrix.asset_name }}
+          chmod +x dist/${{ matrix.asset_name }}
+
+      - name: Prepare artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/release/${{ matrix.artifact_name }} dist/${{ matrix.asset_name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: dist/${{ matrix.asset_name }}
+
+  # Automatically create/update "latest" release on every push to master
+  release-latest:
+    name: Update Latest Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display artifacts
+        run: find artifacts -type f
+
+      - name: Get short SHA
+        id: sha
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Delete existing latest release
+        run: |
+          gh release delete latest --yes || true
+          git push origin :refs/tags/latest || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Latest Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          name: "Latest Build"
+          body: |
+            ## 🚀 Latest Build
+            
+            **Commit:** ${{ github.sha }}
+            **Short SHA:** ${{ steps.sha.outputs.SHORT_SHA }}
+            **Branch:** ${{ github.ref_name }}
+            **Built:** ${{ github.event.head_commit.timestamp }}
+            
+            ### Downloads
+            | Platform | Download |
+            |----------|----------|
+            | Linux (x86_64) | `music-tools-linux-x86_64` |
+            | Windows (x86_64) | `music-tools-windows-x86_64.exe` |
+            | macOS (x86_64) | `music-tools-macos-x86_64` |
+            
+            ### Installation
+            1. Download the appropriate binary for your platform
+            2. **Linux/macOS:** Make executable with `chmod +x music-tools-*`
+            3. Run the application
+            
+            ---
+            ⚠️ *This is an automated build from the latest commit. For stable releases, see tagged versions.*
+          files: |
+            artifacts/music-tools-linux-x86_64/music-tools-linux-x86_64
+            artifacts/music-tools-windows-x86_64.exe/music-tools-windows-x86_64.exe
+            artifacts/music-tools-macos-x86_64/music-tools-macos-x86_64
+          prerelease: true
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

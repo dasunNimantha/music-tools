@@ -881,29 +881,48 @@ fn build_metadata_panel(state: &AppState, theme_mode: ThemeMode) -> Element<'sta
         })))
         .into()
     } else {
-        // Show single status line
-        container(
-            text(&state.status)
-                .size(12)
-                .style(iced::theme::Text::Color(
-                    if state.status.starts_with("Error") || state.status.contains("error") {
-                        colors.error
-                    } else if state.status.starts_with("✓") || state.status.contains("Success") {
-                        colors.success
-                    } else if state.status.contains("Processing") {
-                        colors.info
-                    } else {
-                        colors.text_secondary
-                    },
-                ))
-                .width(Length::Fill),
-        )
-        .width(Length::Fill)
-        .padding([10, 12])
-        .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
-            mode: theme_mode,
-        })))
-        .into()
+        // Show single status line with icon
+        let (icon, text_color, status_text) = if state.status.starts_with("Error") || state.status.contains("error") {
+            (Some(Bootstrap::XCircle), colors.error, state.status.clone())
+        } else if state.status.starts_with("✓") || state.status.contains("Success") {
+            // Remove the checkmark character from the text since we're showing an icon
+            let cleaned = state.status.strip_prefix("✓ ").unwrap_or(&state.status).to_string();
+            (Some(Bootstrap::CheckCircle), colors.success, cleaned)
+        } else if state.status.contains("Processing") {
+            (Some(Bootstrap::ArrowClockwise), colors.info, state.status.clone())
+        } else {
+            (None, colors.text_secondary, state.status.clone())
+        };
+        
+        let status_row = if let Some(icon_type) = icon {
+            row![
+                icon_to_text(icon_type)
+                    .size(14.0)
+                    .style(iced::theme::Text::Color(text_color)),
+                Space::with_width(8),
+                text(&status_text)
+                    .size(12)
+                    .style(iced::theme::Text::Color(text_color))
+                    .width(Length::Fill),
+            ]
+            .spacing(0)
+            .align_items(Alignment::Center)
+        } else {
+            row![
+                text(&status_text)
+                    .size(12)
+                    .style(iced::theme::Text::Color(text_color))
+                    .width(Length::Fill),
+            ]
+        };
+        
+        container(status_row)
+            .width(Length::Fill)
+            .padding([10, 12])
+            .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
+                mode: theme_mode,
+            })))
+            .into()
     };
 
     container(
