@@ -13,30 +13,30 @@ pub struct ColorScheme {
     pub cosmic_purple: Color,
     pub cosmic_accent: Color,
     pub cosmic_accent_dark: Color,
-    
+
     // Background colors
     pub bg_primary: Color,
     pub bg_secondary: Color,
     pub bg_tertiary: Color,
     pub bg_hover: Color,
-    
+
     // Surface colors
     pub surface: Color,
     pub surface_hover: Color,
     pub surface_active: Color,
     pub surface_elevated: Color,
-    
+
     // Text colors
     pub text_primary: Color,
     pub text_secondary: Color,
     pub text_disabled: Color,
-    
+
     // Status colors
     pub success: Color,
     pub warning: Color,
     pub error: Color,
     pub info: Color,
-    
+
     // Border colors
     pub border: Color,
     pub border_light: Color,
@@ -70,7 +70,7 @@ impl ColorScheme {
             border_focus: Color::from_rgb(0.45, 0.65, 1.0),
         }
     }
-    
+
     pub fn light() -> Self {
         Self {
             cosmic_blue: Color::from_rgb(0.2, 0.5, 0.9),
@@ -220,7 +220,16 @@ impl iced::widget::button::StyleSheet for PrimaryButtonStyle {
             },
             text_color: Color::WHITE,
             shadow: iced::Shadow {
-                color: Color::from_rgba(0.25, 0.55, 0.95, if self.mode == ThemeMode::Dark { 0.3 } else { 0.2 }),
+                color: Color::from_rgba(
+                    0.25,
+                    0.55,
+                    0.95,
+                    if self.mode == ThemeMode::Dark {
+                        0.3
+                    } else {
+                        0.2
+                    },
+                ),
                 offset: iced::Vector::new(0.0, 3.0),
                 blur_radius: 8.0,
             },
@@ -271,15 +280,11 @@ impl iced::widget::button::StyleSheet for ProcessingButtonStyle {
         // Pulsing purple effect during processing
         let pulse = ((self.rotation * 3.0).sin() + 1.0) / 2.0;
         let bg_color = if self.rotation > 0.0 {
-            Color::from_rgb(
-                0.5 + pulse * 0.15,
-                0.3 + pulse * 0.1,
-                0.8 + pulse * 0.15,
-            )
+            Color::from_rgb(0.5 + pulse * 0.15, 0.3 + pulse * 0.1, 0.8 + pulse * 0.15)
         } else {
             colors.cosmic_accent
         };
-        
+
         iced::widget::button::Appearance {
             background: Some(iced::Background::Color(bg_color)),
             border: iced::Border {
@@ -289,7 +294,16 @@ impl iced::widget::button::StyleSheet for ProcessingButtonStyle {
             },
             text_color: Color::WHITE,
             shadow: iced::Shadow {
-                color: Color::from_rgba(0.6, 0.35, 0.95, if self.mode == ThemeMode::Dark { 0.4 } else { 0.3 }),
+                color: Color::from_rgba(
+                    0.6,
+                    0.35,
+                    0.95,
+                    if self.mode == ThemeMode::Dark {
+                        0.4
+                    } else {
+                        0.3
+                    },
+                ),
                 offset: iced::Vector::new(0.0, 3.0),
                 blur_radius: 10.0,
             },
@@ -621,7 +635,11 @@ impl iced::widget::button::StyleSheet for TransparentButtonStyle {
                 width: 0.0,
                 radius: 0.0.into(),
             },
-            text_color: if self.is_selected { colors.cosmic_accent } else { colors.text_primary },
+            text_color: if self.is_selected {
+                colors.cosmic_accent
+            } else {
+                colors.text_primary
+            },
             shadow: Default::default(),
             shadow_offset: iced::Vector::new(0.0, 0.0),
         }
@@ -642,4 +660,3 @@ impl iced::widget::button::StyleSheet for TransparentButtonStyle {
         appearance
     }
 }
-

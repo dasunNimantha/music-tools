@@ -1,12 +1,12 @@
-use iced::{Application, Command, Subscription, Theme};
-use iced::time;
-use std::time::Duration;
+use crate::file_dialog::{scan_folder_async, select_files, select_folder_dialog, select_image};
 use crate::message::Message;
-use crate::model::{AppState, Screen};
-use crate::theme::{ThemeMode, cosmic_theme};
-use crate::view::build_view;
-use crate::file_dialog::{select_files, select_folder_dialog, scan_folder_async, select_image};
 use crate::metadata::{process_files, read_file_metadata};
+use crate::model::{AppState, Screen};
+use crate::theme::{cosmic_theme, ThemeMode};
+use crate::view::build_view;
+use iced::time;
+use iced::{Application, Command, Subscription, Theme};
+use std::time::Duration;
 
 pub struct MusicToolsApp {
     state: AppState,
@@ -49,25 +49,19 @@ impl Application for MusicToolsApp {
                 self.state.current_screen = Screen::Home;
                 Command::none()
             }
-            
+
             // Metadata Editor
             Message::SelectFiles => {
                 if let Some(selected_files) = select_files() {
                     self.state.loading_files = true;
                     self.state.status = "Loading files...".to_string();
-                    Command::perform(
-                        async move { selected_files },
-                        Message::FilesSelected,
-                    )
+                    Command::perform(async move { selected_files }, Message::FilesSelected)
                 } else {
                     Command::none()
                 }
             }
             Message::SelectFolder => {
-                Command::perform(
-                    select_folder_dialog(),
-                    Message::FolderSelected,
-                )
+                Command::perform(select_folder_dialog(), Message::FolderSelected)
             }
             Message::FolderSelected(folder_path) => {
                 if let Some(path) = folder_path {
@@ -79,10 +73,7 @@ impl Application for MusicToolsApp {
             }
             Message::StartFolderScan => {
                 if let Some(path) = self.state.pending_folder_scan.take() {
-                    Command::perform(
-                        scan_folder_async(path),
-                        Message::FilesSelected,
-                    )
+                    Command::perform(scan_folder_async(path), Message::FilesSelected)
                 } else {
                     Command::none()
                 }
@@ -113,10 +104,7 @@ impl Application for MusicToolsApp {
             }
             Message::SelectImage => {
                 if let Some(image_path) = select_image() {
-                    Command::perform(
-                        async move { Some(image_path) },
-                        Message::ImageSelected,
-                    )
+                    Command::perform(async move { Some(image_path) }, Message::ImageSelected)
                 } else {
                     Command::none()
                 }
@@ -133,28 +121,33 @@ impl Application for MusicToolsApp {
                     self.state.status = "No files selected".to_string();
                     return Command::none();
                 }
-                if self.state.artist.trim().is_empty() && self.state.album.trim().is_empty() 
-                   && self.state.genre.trim().is_empty() && self.state.year.trim().is_empty()
-                   && self.state.album_art_path.is_none() {
+                if self.state.artist.trim().is_empty()
+                    && self.state.album.trim().is_empty()
+                    && self.state.genre.trim().is_empty()
+                    && self.state.year.trim().is_empty()
+                    && self.state.album_art_path.is_none()
+                {
                     self.state.status = "Please fill in at least one metadata field".to_string();
                     return Command::none();
                 }
-                
+
                 self.state.processing = true;
                 self.state.error_logs.clear();
                 self.state.status = format!("Processing {} files...", self.state.files.len());
-                
+
                 let files = self.state.files.clone();
                 let artist = self.state.artist.clone();
                 let album = self.state.album.clone();
-                let genre = if self.state.genre.trim().is_empty() { None } else { Some(self.state.genre.clone()) };
+                let genre = if self.state.genre.trim().is_empty() {
+                    None
+                } else {
+                    Some(self.state.genre.clone())
+                };
                 let year = self.state.year.parse::<u32>().ok();
                 let album_art = self.state.album_art_path.clone();
-                
+
                 Command::perform(
-                    async move {
-                        process_files(files, artist, album, genre, year, album_art).await
-                    },
+                    async move { process_files(files, artist, album, genre, year, album_art).await },
                     Message::ProcessingComplete,
                 )
             }
@@ -163,7 +156,10 @@ impl Application for MusicToolsApp {
                 match result {
                     Ok(errors) => {
                         if errors.is_empty() {
-                            self.state.status = format!("✓ Successfully updated {} file(s)", self.state.files.len());
+                            self.state.status = format!(
+                                "✓ Successfully updated {} file(s)",
+                                self.state.files.len()
+                            );
                         } else {
                             self.state.status = format!("Completed with {} error(s)", errors.len());
                             self.state.error_logs = errors;
@@ -178,9 +174,7 @@ impl Application for MusicToolsApp {
                 if let Some(idx) = self.state.selected_file_index {
                     let file_path = self.state.files[idx].clone();
                     return Command::perform(
-                        async move {
-                            (idx, read_file_metadata(file_path))
-                        },
+                        async move { (idx, read_file_metadata(file_path)) },
                         |(idx, result)| Message::MetadataLoaded(idx, result),
                     );
                 }
@@ -227,9 +221,7 @@ impl Application for MusicToolsApp {
                     self.state.selected_file_index = Some(index);
                     let file_path = self.state.files[index].clone();
                     Command::perform(
-                        async move {
-                            (index, read_file_metadata(file_path))
-                        },
+                        async move { (index, read_file_metadata(file_path)) },
                         |(idx, result)| Message::MetadataLoaded(idx, result),
                     )
                 } else {
@@ -247,7 +239,7 @@ impl Application for MusicToolsApp {
                 }
                 Command::none()
             }
-            
+
             // Music Downloader (placeholder)
             Message::DownloadUrlChanged(url) => {
                 self.state.download_url = url;
@@ -257,7 +249,7 @@ impl Application for MusicToolsApp {
                 self.state.download_status = "This feature is coming soon!".to_string();
                 Command::none()
             }
-            
+
             // Audio Converter (placeholder)
             Message::SelectConvertFiles => {
                 self.state.convert_status = "This feature is coming soon!".to_string();
@@ -271,7 +263,7 @@ impl Application for MusicToolsApp {
                 self.state.convert_status = "This feature is coming soon!".to_string();
                 Command::none()
             }
-            
+
             // Theme
             Message::ToggleTheme => {
                 self.theme_mode = match self.theme_mode {
@@ -280,7 +272,7 @@ impl Application for MusicToolsApp {
                 };
                 Command::none()
             }
-            
+
             // Animation
             Message::Tick(_) => {
                 if self.state.loading_files || self.state.processing {
@@ -309,7 +301,7 @@ impl Application for MusicToolsApp {
     fn theme(&self) -> Theme {
         cosmic_theme(self.theme_mode)
     }
-    
+
     fn subscription(&self) -> Subscription<Message> {
         let active = self.state.loading_files || self.state.processing;
         if active {

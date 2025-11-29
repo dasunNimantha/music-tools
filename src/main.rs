@@ -1,10 +1,10 @@
-use music_tools::MusicToolsApp;
-use iced::{Application, Settings, Pixels, Font};
+use iced::{Application, Font, Pixels, Settings};
 use music_tools::config::window;
+use music_tools::MusicToolsApp;
 
 fn main() -> iced::Result {
     let fira_sans_font = Font::with_name("Fira Sans");
-    
+
     MusicToolsApp::run(Settings {
         window: iced::window::Settings {
             size: window::default_size(),

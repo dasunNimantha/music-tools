@@ -1,13 +1,13 @@
+use crate::model::{FileMetadata, Screen};
 use std::path::PathBuf;
 use std::time::Instant;
-use crate::model::{FileMetadata, Screen};
 
 #[derive(Debug, Clone)]
 pub enum Message {
     // Navigation
     NavigateTo(Screen),
     GoHome,
-    
+
     // Metadata Editor
     SelectFiles,
     SelectFolder,
@@ -26,19 +26,19 @@ pub enum Message {
     ClearAllFiles,
     FileSelected(usize),
     MetadataLoaded(usize, Result<FileMetadata, String>),
-    
+
     // Music Downloader (placeholder)
     DownloadUrlChanged(String),
     StartDownload,
-    
+
     // Audio Converter (placeholder)
     SelectConvertFiles,
     ConvertFormatChanged(String),
     StartConvert,
-    
+
     // Theme
     ToggleTheme,
-    
+
     // Animation
     Tick(Instant),
 }
