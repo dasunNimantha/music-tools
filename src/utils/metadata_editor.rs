@@ -1,8 +1,8 @@
 // Metadata Editor Utility
 // Handles editing artist, album, genre, year, and cover art for music files
 
-use std::path::PathBuf;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Metadata information for a single audio file
 #[derive(Debug, Clone, Default)]
@@ -44,14 +44,14 @@ impl MetadataEditorState {
             ..Default::default()
         }
     }
-    
+
     pub fn clear_files(&mut self) {
         self.files.clear();
         self.file_metadata.clear();
         self.selected_file_index = None;
         self.status = "All files cleared".to_string();
     }
-    
+
     pub fn remove_file(&mut self, index: usize) {
         if index < self.files.len() {
             if let Some(selected) = self.selected_file_index {
@@ -62,7 +62,7 @@ impl MetadataEditorState {
                 }
             }
             self.files.remove(index);
-            
+
             // Reindex metadata
             let old_metadata: Vec<_> = (0..self.files.len() + 1)
                 .filter_map(|i| {
@@ -83,4 +83,3 @@ impl MetadataEditorState {
         }
     }
 }
-

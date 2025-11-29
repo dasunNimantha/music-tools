@@ -1,7 +1,7 @@
+use crate::config::SUPPORTED_FORMATS;
+use rfd::{AsyncFileDialog, FileDialog};
 use std::path::PathBuf;
 use walkdir::WalkDir;
-use rfd::{FileDialog, AsyncFileDialog};
-use crate::config::SUPPORTED_FORMATS;
 
 pub fn select_image() -> Option<PathBuf> {
     FileDialog::new()
@@ -12,7 +12,10 @@ pub fn select_image() -> Option<PathBuf> {
 
 pub fn select_files() -> Option<Vec<PathBuf>> {
     FileDialog::new()
-        .add_filter("Audio Files", &["mp3", "flac", "m4a", "ogg", "wma", "aac", "mp4", "opus"])
+        .add_filter(
+            "Audio Files",
+            &["mp3", "flac", "m4a", "ogg", "wma", "aac", "mp4", "opus"],
+        )
         .set_directory(std::env::current_dir().unwrap_or_default())
         .pick_files()
 }
@@ -22,7 +25,7 @@ pub async fn select_folder_dialog() -> Option<PathBuf> {
         .set_directory(std::env::current_dir().unwrap_or_default())
         .pick_folder()
         .await;
-    
+
     folder.map(|handle| handle.path().to_path_buf())
 }
 
@@ -32,10 +35,7 @@ pub async fn scan_folder_async(folder_path: PathBuf) -> Vec<PathBuf> {
 
 pub fn scan_folder_for_audio(folder_path: &PathBuf) -> Vec<PathBuf> {
     let mut audio_files = Vec::new();
-    for entry in WalkDir::new(folder_path)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
+    for entry in WalkDir::new(folder_path).into_iter().filter_map(|e| e.ok()) {
         if entry.file_type().is_file() {
             let path = entry.path();
             if let Some(ext) = path.extension() {
@@ -48,4 +48,3 @@ pub fn scan_folder_for_audio(folder_path: &PathBuf) -> Vec<PathBuf> {
     }
     audio_files
 }
-

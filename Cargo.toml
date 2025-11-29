@@ -13,3 +13,6 @@ lofty = "0.19"
 walkdir = "2.4"
 rfd = "0.14"
 anyhow = "1.0"
+
+[dev-dependencies]
+cargo-husky = { version = "1", default-features = false, features = ["precommit-hook", "run-cargo-fmt"] }

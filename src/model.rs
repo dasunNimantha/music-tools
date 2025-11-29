@@ -1,21 +1,16 @@
-use std::path::PathBuf;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Screen {
+    #[default]
     Home,
     MetadataEditor,
     MusicDownloader,
     AudioConverter,
 }
 
-impl Default for Screen {
-    fn default() -> Self {
-        Screen::Home
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct FileMetadata {
     pub artist: String,
     pub album: String,
@@ -28,24 +23,6 @@ pub struct FileMetadata {
     pub bitrate: Option<u32>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
-}
-
-impl Default for FileMetadata {
-    fn default() -> Self {
-        Self {
-            artist: String::new(),
-            album: String::new(),
-            title: String::new(),
-            year: None,
-            genre: String::new(),
-            track: None,
-            duration: None,
-            format: String::new(),
-            bitrate: None,
-            sample_rate: None,
-            channels: None,
-        }
-    }
 }
 
 pub struct AppState {
@@ -68,7 +45,7 @@ pub struct AppState {
     // Music Downloader state
     pub download_url: String,
     pub download_status: String,
-    // Audio Converter state  
+    // Audio Converter state
     pub convert_format: String,
     pub convert_status: String,
 }

@@ -24,7 +24,7 @@ impl OutputFormat {
             OutputFormat::AAC => "AAC",
         }
     }
-    
+
     pub fn all() -> &'static [OutputFormat] {
         &[
             OutputFormat::MP3,
@@ -54,4 +54,3 @@ impl AudioConverterState {
         }
     }
 }
-

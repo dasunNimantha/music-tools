@@ -1,0 +1,47 @@
+#!/bin/sh
+# Pre-commit hook for music-tools
+# Runs cargo fmt to ensure code is formatted
+
+# Source cargo environment if available
+if [ -f "$HOME/.cargo/env" ]; then
+    . "$HOME/.cargo/env"
+fi
+
+echo "🔍 Running cargo fmt..."
+
+# Check if cargo is available
+if ! command -v cargo >/dev/null 2>&1; then
+    # Try common cargo locations
+    if [ -x "$HOME/.cargo/bin/cargo" ]; then
+        export PATH="$HOME/.cargo/bin:$PATH"
+    else
+        echo "❌ cargo not found. Please install Rust."
+        exit 1
+    fi
+fi
+
+# Run cargo fmt and check for changes
+cargo fmt --all -- --check
+FMT_STATUS=$?
+
+if [ $FMT_STATUS -ne 0 ]; then
+    echo ""
+    echo "❌ Formatting issues found!"
+    echo "   Run 'cargo fmt --all' to fix them."
+    echo ""
+    exit 1
+fi
+
+echo "✅ Code formatting OK"
+
+# Optional: Run clippy (uncomment to enable)
+# echo "🔍 Running clippy..."
+# cargo clippy --all-targets --all-features -- -D warnings
+# if [ $? -ne 0 ]; then
+#     echo "❌ Clippy found issues!"
+#     exit 1
+# fi
+# echo "✅ Clippy OK"
+
+exit 0
+
