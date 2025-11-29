@@ -1,6 +1,6 @@
 [package]
 name = "music-tools"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Music Tools - A multi-utility suite for music file management"
 authors = ["Your Name"]
