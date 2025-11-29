@@ -1,0 +1,15 @@
+[package]
+name = "music-tools"
+version = "0.1.0"
+edition = "2021"
+description = "Music Tools - A multi-utility suite for music file management"
+authors = ["Your Name"]
+license = "MIT"
+
+[dependencies]
+iced = { version = "0.12", features = ["svg", "tokio"] }
+iced_aw = { version = "0.9", default-features = false, features = ["icons"] }
+lofty = "0.19"
+walkdir = "2.4"
+rfd = "0.14"
+anyhow = "1.0"
