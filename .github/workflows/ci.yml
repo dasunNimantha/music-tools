@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches-ignore:
+      - main
+      - master
   pull_request:
     branches: [main, master]
 
@@ -10,11 +12,10 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Run checks only on PRs (not on push to master)
+  # Run checks on all pushes and PRs
   check:
     name: Check
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
       
@@ -47,10 +48,11 @@ jobs:
         run: cargo test
         continue-on-error: true
 
-  # Build binaries (only on regular pushes, skip release-please version commits)
+  # Build binaries (only on push to main/master, not PRs)
   build:
     name: Build (${{ matrix.os }})
-    if: "${{ github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'chore(master)') }}"
+    needs: check
+    if: github.event_name == 'push'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
