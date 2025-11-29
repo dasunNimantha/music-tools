@@ -219,49 +219,53 @@ impl iced::widget::button::StyleSheet for UtilityCardButtonStyle {
     }
 
     fn hovered(&self, _style: &Self::Style) -> iced::widget::button::Appearance {
+        let colors = get_colors(self.mode);
+        // Use cosmic blue for hover (same as button hover)
         let shadow_color = if self.mode == ThemeMode::Dark {
-            Color::from_rgba(0.85, 0.4, 1.0, 0.45)
+            Color::from_rgba(0.25, 0.55, 0.95, 0.5)
         } else {
-            Color::from_rgba(0.8, 0.35, 1.0, 0.35)
+            Color::from_rgba(0.25, 0.55, 0.95, 0.4)
         };
         let hover_bg = if self.mode == ThemeMode::Dark {
-            Color::from_rgba(0.85, 0.5, 1.0, 0.06)
+            Color::from_rgba(0.25, 0.55, 0.95, 0.08)
         } else {
-            Color::from_rgba(0.8, 0.4, 1.0, 0.05)
+            Color::from_rgba(0.25, 0.55, 0.95, 0.06)
         };
         iced::widget::button::Appearance {
             background: Some(iced::Background::Color(hover_bg)),
             border: iced::Border {
-                color: Color::TRANSPARENT,
-                width: 0.0,
+                color: colors.cosmic_accent,
+                width: 1.5,
                 radius: 12.0.into(),
             },
             text_color: Color::WHITE,
             shadow: iced::Shadow {
                 color: shadow_color,
-                offset: iced::Vector::new(0.0, 1.0),
-                blur_radius: 10.0,
+                offset: iced::Vector::new(0.0, 2.0),
+                blur_radius: 12.0,
             },
             shadow_offset: iced::Vector::new(0.0, 0.0),
         }
     }
 
     fn pressed(&self, _style: &Self::Style) -> iced::widget::button::Appearance {
+        let colors = get_colors(self.mode);
+        // Use darker blue for pressed state
         let shadow_color = if self.mode == ThemeMode::Dark {
-            Color::from_rgba(0.85, 0.4, 1.0, 0.35)
+            Color::from_rgba(0.2, 0.45, 0.85, 0.35)
         } else {
-            Color::from_rgba(0.8, 0.35, 1.0, 0.25)
+            Color::from_rgba(0.2, 0.45, 0.85, 0.25)
         };
         let press_bg = if self.mode == ThemeMode::Dark {
-            Color::from_rgba(0.85, 0.5, 1.0, 0.08)
+            Color::from_rgba(0.25, 0.55, 0.95, 0.12)
         } else {
-            Color::from_rgba(0.8, 0.4, 1.0, 0.06)
+            Color::from_rgba(0.25, 0.55, 0.95, 0.1)
         };
         iced::widget::button::Appearance {
             background: Some(iced::Background::Color(press_bg)),
             border: iced::Border {
-                color: Color::TRANSPARENT,
-                width: 0.0,
+                color: colors.cosmic_blue,
+                width: 1.5,
                 radius: 12.0.into(),
             },
             text_color: Color::WHITE,
