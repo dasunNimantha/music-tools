@@ -10,10 +10,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Run checks on all pushes and PRs
+  # Run checks only on PRs (not on push to master)
   check:
     name: Check
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
       
@@ -49,7 +50,6 @@ jobs:
   # Build binaries (only on push to main/master, not PRs)
   build:
     name: Build (${{ matrix.os }})
-    needs: check
     if: github.event_name == 'push'
     runs-on: ${{ matrix.os }}
     strategy:
