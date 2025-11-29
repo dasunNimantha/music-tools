@@ -47,10 +47,10 @@ jobs:
         run: cargo test
         continue-on-error: true
 
-  # Build binaries (only on push to main/master, not PRs)
+  # Build binaries (only on regular pushes, skip release-please version commits)
   build:
     name: Build (${{ matrix.os }})
-    if: github.event_name == 'push'
+    if: "${{ github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'chore(master)') }}"
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
