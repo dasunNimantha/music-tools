@@ -1,8 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches: [main, master]
   pull_request:
     branches: [main, master]
 
@@ -10,11 +8,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Run checks only on PRs (not on push to master)
   check:
     name: Check
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
       
@@ -46,96 +42,3 @@ jobs:
       - name: Run tests
         run: cargo test
         continue-on-error: true
-
-  # Build binaries (only on regular pushes, skip release-please version commits)
-  build:
-    name: Build (${{ matrix.os }})
-    if: "${{ github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'chore(master)') }}"
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            artifact_name: music-tools
-            asset_name: music-tools-linux-x86_64
-          - os: windows-latest
-            artifact_name: music-tools.exe
-            asset_name: music-tools-windows-x86_64.exe
-          - os: macos-latest
-            artifact_name: music-tools
-            asset_name: music-tools-macos-x86_64
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libwayland-dev libvulkan-dev libssl-dev pkg-config
-
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Build
-        run: cargo build --release
-
-      - name: Prepare artifact
-        shell: bash
-        run: |
-          mkdir -p dist
-          cp target/release/${{ matrix.artifact_name }} dist/${{ matrix.asset_name }}
-          [ "$RUNNER_OS" != "Windows" ] && chmod +x dist/${{ matrix.asset_name }} || true
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.asset_name }}
-          path: dist/${{ matrix.asset_name }}
-
-  # Create "latest" release
-  release-latest:
-    name: Latest Release
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Delete old latest release
-        run: gh release delete latest --yes || true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create latest release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: latest
-          name: "Latest Build"
-          body: |
-            ## 🚀 Latest Build (commit: ${{ github.sha }})
-            
-            | Platform | Download |
-            |----------|----------|
-            | Linux | `music-tools-linux-x86_64` |
-            | Windows | `music-tools-windows-x86_64.exe` |
-            | macOS | `music-tools-macos-x86_64` |
-            
-            ⚠️ *Automated build. For stable releases, see tagged versions.*
-          files: artifacts/*/*
-          prerelease: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
