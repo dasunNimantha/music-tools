@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3](https://github.com/dasunNimantha/music-tools/compare/v0.2.2...v0.2.3) (2025-11-30)
+
+
+### ✨ Features
+
+* download and play music ([#15](https://github.com/dasunNimantha/music-tools/issues/15)) ([0690b60](https://github.com/dasunNimantha/music-tools/commit/0690b60ecc0d4ecc218db5711323d54721a9faf6))
+
 ## [0.2.2](https://github.com/dasunNimantha/music-tools/compare/v0.2.1...v0.2.2) (2025-11-29)
 
 
