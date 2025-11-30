@@ -35,6 +35,7 @@ pub struct SearchResults {
     pub artists: Vec<String>,
 }
 
+#[derive(Clone)]
 pub struct SongHubScraper {
     client: reqwest::Client,
 }
@@ -389,6 +390,9 @@ impl SongHubScraper {
                 }
             }
         }
+
+        // Sort songs by title in ascending order (case-insensitive)
+        songs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
 
         Ok(songs)
     }

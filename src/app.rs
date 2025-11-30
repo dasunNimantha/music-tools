@@ -62,6 +62,12 @@ impl Application for MusicToolsApp {
                     audio_player::stop_audio();
                     self.state.downloader_state.playing_song_index = None;
                     self.state.downloader_state.streaming_url = None;
+                    // Clear download logs when leaving downloader
+                    self.state.error_logs.clear();
+                }
+                // Clear error logs when entering metadata editor (they're for metadata processing only)
+                if screen == Screen::MetadataEditor {
+                    self.state.error_logs.clear();
                 }
                 self.state.current_screen = screen;
                 if screen == Screen::MusicDownloader
@@ -87,7 +93,11 @@ impl Application for MusicToolsApp {
                     audio_player::stop_audio();
                     self.state.downloader_state.playing_song_index = None;
                     self.state.downloader_state.streaming_url = None;
+                    // Clear download logs when leaving downloader
+                    self.state.error_logs.clear();
                 }
+                // Clear error logs when going home
+                self.state.error_logs.clear();
                 self.state.current_screen = Screen::Home;
                 Command::none()
             }
@@ -510,29 +520,36 @@ impl Application for MusicToolsApp {
                     },
                 )
             }
-            Message::StreamingUrlLoaded(index, result) => match result {
-                Ok(Some(url)) => {
-                    self.state.downloader_state.streaming_url = Some(url.clone());
-                    if let Some(ref song) = self.state.downloader_state.search_results.get(index) {
-                        self.state.downloader_state.status = format!("Playing: {}...", song.title);
-                    }
+            Message::StreamingUrlLoaded(index, result) => {
+                match result {
+                    Ok(Some(url)) => {
+                        // Ensure the playing index is set correctly
+                        self.state.downloader_state.playing_song_index = Some(index);
+                        self.state.downloader_state.streaming_url = Some(url.clone());
+                        if let Some(ref song) =
+                            self.state.downloader_state.search_results.get(index)
+                        {
+                            self.state.downloader_state.status =
+                                format!("Playing: {}...", song.title);
+                        }
 
-                    Command::perform(
-                        async move { audio_player::play_streaming_url(url).await },
-                        |_| Message::StopSong,
-                    )
+                        // Start audio playback (non-blocking - allows app to close)
+                        // Spawn directly without waiting
+                        audio_player::play_streaming_url_async(url);
+                        Command::none()
+                    }
+                    Ok(None) => {
+                        self.state.downloader_state.playing_song_index = None;
+                        self.state.downloader_state.status = "No streaming URL found".to_string();
+                        Command::none()
+                    }
+                    Err(e) => {
+                        self.state.downloader_state.playing_song_index = None;
+                        self.state.downloader_state.status = format!("Failed to load audio: {}", e);
+                        Command::none()
+                    }
                 }
-                Ok(None) => {
-                    self.state.downloader_state.playing_song_index = None;
-                    self.state.downloader_state.status = "No streaming URL found".to_string();
-                    Command::none()
-                }
-                Err(e) => {
-                    self.state.downloader_state.playing_song_index = None;
-                    self.state.downloader_state.status = format!("Failed to load audio: {}", e);
-                    Command::none()
-                }
-            },
+            }
             Message::StopSong => {
                 audio_player::stop_audio();
                 self.state.downloader_state.playing_song_index = None;
@@ -602,57 +619,86 @@ impl Application for MusicToolsApp {
 
                 Command::perform(
                     async move {
+                        use futures::stream::{FuturesUnordered, StreamExt};
+                        use std::sync::Arc;
+                        use tokio::sync::Semaphore;
+
                         let scraper = SongHubScraper::new()?;
                         let mut errors = Vec::new();
+                        let mut success_logs = Vec::new();
+
+                        // Limit concurrent downloads to 5
+                        let semaphore = Arc::new(Semaphore::new(5));
+                        let mut download_tasks = FuturesUnordered::new();
 
                         for &song_idx in selected_indices.iter() {
                             if song_idx >= songs.len() {
                                 continue;
                             }
 
-                            let song = &songs[song_idx];
+                            let song = songs[song_idx].clone();
+                            let scraper_clone = scraper.clone();
+                            let semaphore_clone = semaphore.clone();
+                            let download_path_clone = download_path.clone();
 
-                            let download_url = match scraper.get_download_url(&song.url).await {
-                                Ok(Some(url)) => url,
-                                Ok(None) => {
-                                    errors.push(format!("No download URL for: {}", song.title));
-                                    continue;
-                                }
-                                Err(e) => {
-                                    errors.push(format!(
-                                        "Failed to get URL for {}: {}",
-                                        song.title, e
-                                    ));
-                                    continue;
+                            // Spawn download task with semaphore limit
+                            let task = async move {
+                                let _permit = semaphore_clone.acquire().await.unwrap();
+
+                                let download_url = match scraper_clone
+                                    .get_download_url(&song.url)
+                                    .await
+                                {
+                                    Ok(Some(url)) => url,
+                                    Ok(None) => {
+                                        return Err(format!("No download URL for: {}", song.title));
+                                    }
+                                    Err(e) => {
+                                        return Err(format!(
+                                            "Failed to get URL for {}: {}",
+                                            song.title, e
+                                        ));
+                                    }
+                                };
+
+                                let safe_title = song
+                                    .title
+                                    .chars()
+                                    .map(|c| match c {
+                                        '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
+                                        _ => c,
+                                    })
+                                    .collect::<String>()
+                                    .trim()
+                                    .to_string();
+                                let filename = format!("{}.mp3", safe_title);
+                                let output_path = download_path_clone.join(&filename);
+
+                                match scraper_clone
+                                    .download_song(&download_url, &output_path)
+                                    .await
+                                {
+                                    Ok(_) => Ok(format!("✓ Downloaded: {}", song.title)),
+                                    Err(e) => {
+                                        Err(format!("Failed to download {}: {}", song.title, e))
+                                    }
                                 }
                             };
 
-                            let safe_title = song
-                                .title
-                                .chars()
-                                .map(|c| match c {
-                                    '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
-                                    _ => c,
-                                })
-                                .collect::<String>()
-                                .trim()
-                                .to_string();
-                            let filename = format!("{}.mp3", safe_title);
-                            let output_path = download_path.join(&filename);
+                            download_tasks.push(task);
+                        }
 
-                            if let Err(e) = scraper.download_song(&download_url, &output_path).await
-                            {
-                                errors.push(format!("Failed to download {}: {}", song.title, e));
+                        // Process all downloads concurrently (max 5 at a time)
+                        while let Some(result) = download_tasks.next().await {
+                            match result {
+                                Ok(log) => success_logs.push(log),
+                                Err(error) => errors.push(error),
                             }
                         }
 
-                        if errors.is_empty() {
-                            Ok(Vec::new())
-                        } else {
-                            Ok(errors)
-                        }
+                        Ok((success_logs, errors))
                     },
-                    |result: Result<Vec<String>, anyhow::Error>| {
+                    |result: Result<(Vec<String>, Vec<String>), anyhow::Error>| {
                         Message::DownloadComplete(result.map_err(|e| e.to_string()))
                     },
                 )
@@ -660,19 +706,27 @@ impl Application for MusicToolsApp {
             Message::DownloadComplete(result) => {
                 self.state.downloader_state.downloading = false;
                 match result {
-                    Ok(errors) => {
+                    Ok((success_logs, errors)) => {
+                        let total = self.state.downloader_state.selected_songs.len();
+                        let success_count = success_logs.len();
+                        let error_count = errors.len();
+
                         if errors.is_empty() {
-                            self.state.downloader_state.status = format!(
-                                "Successfully downloaded {} song(s)",
-                                self.state.downloader_state.selected_songs.len()
-                            );
-                        } else {
                             self.state.downloader_state.status =
-                                format!("Downloaded with {} error(s)", errors.len());
+                                format!("Successfully downloaded {} song(s)", success_count);
+                        } else {
+                            self.state.downloader_state.status = format!(
+                                "Downloaded {} of {} song(s) ({} error(s))",
+                                success_count, total, error_count
+                            );
                         }
+
+                        // Clear individual logs - only show summary
+                        self.state.error_logs.clear();
                     }
                     Err(e) => {
                         self.state.downloader_state.status = format!("Download failed: {}", e);
+                        self.state.error_logs = vec![format!("Download failed: {}", e)];
                     }
                 }
                 Command::none()
