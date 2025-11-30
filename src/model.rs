@@ -1,3 +1,4 @@
+use crate::utils::music_downloader::MusicDownloaderState;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -42,9 +43,9 @@ pub struct AppState {
     pub scan_delay_ticks: u32,
     pub selected_file_index: Option<usize>,
     pub file_metadata: HashMap<usize, FileMetadata>,
+    pub last_metadata_folder: Option<PathBuf>,
     // Music Downloader state
-    pub download_url: String,
-    pub download_status: String,
+    pub downloader_state: MusicDownloaderState,
     // Audio Converter state
     pub convert_format: String,
     pub convert_status: String,
@@ -69,8 +70,8 @@ impl Default for AppState {
             scan_delay_ticks: 0,
             selected_file_index: None,
             file_metadata: HashMap::new(),
-            download_url: String::new(),
-            download_status: "Enter a URL to download".to_string(),
+            last_metadata_folder: None,
+            downloader_state: MusicDownloaderState::new(),
             convert_format: "MP3".to_string(),
             convert_status: "Select files to convert".to_string(),
         }

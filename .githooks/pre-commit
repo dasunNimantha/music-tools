@@ -20,19 +20,22 @@ if ! command -v cargo >/dev/null 2>&1; then
     fi
 fi
 
-# Run cargo fmt and check for changes
-cargo fmt --all -- --check
+# Run cargo fmt to automatically fix formatting
+echo "🔧 Auto-formatting code..."
+cargo fmt --all
 FMT_STATUS=$?
 
 if [ $FMT_STATUS -ne 0 ]; then
     echo ""
-    echo "❌ Formatting issues found!"
-    echo "   Run 'cargo fmt --all' to fix them."
+    echo "❌ Failed to format code!"
     echo ""
     exit 1
 fi
 
-echo "✅ Code formatting OK"
+# Stage the formatted files
+git add -u
+
+echo "✅ Code formatted and staged"
 
 # Optional: Run clippy (uncomment to enable)
 # echo "🔍 Running clippy..."

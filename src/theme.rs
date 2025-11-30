@@ -180,6 +180,36 @@ impl iced::widget::container::StyleSheet for ElevatedCardStyle {
     }
 }
 
+pub struct HeaderStyle {
+    pub mode: ThemeMode,
+}
+
+impl iced::widget::container::StyleSheet for HeaderStyle {
+    type Style = iced::Theme;
+
+    fn appearance(&self, _style: &Self::Style) -> iced::widget::container::Appearance {
+        let colors = get_colors(self.mode);
+        iced::widget::container::Appearance {
+            text_color: None,
+            background: Some(iced::Background::Color(colors.surface_elevated)),
+            border: iced::Border {
+                color: colors.border_light,
+                width: 1.0,
+                radius: 12.0.into(),
+            },
+            shadow: iced::Shadow {
+                color: if self.mode == ThemeMode::Dark {
+                    Color::from_rgba(0.0, 0.0, 0.0, 0.15)
+                } else {
+                    Color::from_rgba(0.0, 0.0, 0.0, 0.08)
+                },
+                offset: iced::Vector::new(0.0, 2.0),
+                blur_radius: 8.0,
+            },
+        }
+    }
+}
+
 pub struct FileItemStyle {
     pub mode: ThemeMode,
 }
@@ -428,6 +458,91 @@ impl iced::widget::text_input::StyleSheet for TextInputStyle {
     fn disabled_color(&self, _style: &Self::Style) -> Color {
         let colors = get_colors(self.mode);
         colors.text_disabled
+    }
+}
+
+pub struct PlayButtonStyle {
+    pub mode: ThemeMode,
+    pub is_playing: bool,
+}
+
+impl iced::widget::button::StyleSheet for PlayButtonStyle {
+    type Style = iced::Theme;
+
+    fn active(&self, _style: &Self::Style) -> iced::widget::button::Appearance {
+        let bg_color = if self.is_playing {
+            // Red/orange for stop
+            if self.mode == ThemeMode::Dark {
+                Color::from_rgb(0.9, 0.3, 0.3)
+            } else {
+                Color::from_rgb(0.85, 0.25, 0.25)
+            }
+        } else {
+            // Green for play
+            if self.mode == ThemeMode::Dark {
+                Color::from_rgb(0.3, 0.75, 0.4)
+            } else {
+                Color::from_rgb(0.25, 0.7, 0.35)
+            }
+        };
+        iced::widget::button::Appearance {
+            background: Some(iced::Background::Color(bg_color)),
+            border: iced::Border {
+                color: Color::TRANSPARENT,
+                width: 0.0,
+                radius: 8.0.into(),
+            },
+            text_color: Color::WHITE,
+            shadow: iced::Shadow {
+                color: Color::from_rgba(0.0, 0.0, 0.0, 0.2),
+                offset: iced::Vector::new(0.0, 2.0),
+                blur_radius: 4.0,
+            },
+            shadow_offset: iced::Vector::new(0.0, 2.0),
+        }
+    }
+
+    fn hovered(&self, style: &Self::Style) -> iced::widget::button::Appearance {
+        let mut appearance = self.active(style);
+        if self.is_playing {
+            // Darker red on hover
+            appearance.background =
+                Some(iced::Background::Color(if self.mode == ThemeMode::Dark {
+                    Color::from_rgb(0.95, 0.25, 0.25)
+                } else {
+                    Color::from_rgb(0.9, 0.2, 0.2)
+                }));
+        } else {
+            // Brighter green on hover
+            appearance.background =
+                Some(iced::Background::Color(if self.mode == ThemeMode::Dark {
+                    Color::from_rgb(0.35, 0.8, 0.45)
+                } else {
+                    Color::from_rgb(0.3, 0.75, 0.4)
+                }));
+        }
+        appearance.shadow.offset = iced::Vector::new(0.0, 3.0);
+        appearance.shadow.blur_radius = 6.0;
+        appearance.shadow_offset = iced::Vector::new(0.0, 3.0);
+        appearance
+    }
+
+    fn pressed(&self, style: &Self::Style) -> iced::widget::button::Appearance {
+        let mut appearance = self.hovered(style);
+        appearance.shadow.offset = iced::Vector::new(0.0, 1.0);
+        appearance.shadow.blur_radius = 2.0;
+        appearance.shadow_offset = iced::Vector::new(0.0, 1.0);
+        appearance
+    }
+
+    fn disabled(&self, style: &Self::Style) -> iced::widget::button::Appearance {
+        let mut appearance = self.active(style);
+        let colors = get_colors(self.mode);
+        appearance.background = Some(iced::Background::Color(colors.bg_tertiary));
+        appearance.text_color = colors.text_disabled;
+        appearance.shadow = Default::default();
+        appearance.shadow_offset = iced::Vector::new(0.0, 0.0);
+        appearance
     }
 }
 
