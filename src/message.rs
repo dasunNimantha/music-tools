@@ -42,7 +42,7 @@ pub enum Message {
     SelectDownloadDirectory,
     DownloadDirectorySelected(Option<PathBuf>),
     DownloadSelectedSongs,
-    DownloadComplete(Result<Vec<String>, String>),
+    DownloadComplete(Result<(Vec<String>, Vec<String>), String>),
     PlaySong(usize),
     StopSong,
     StreamingUrlLoaded(usize, Result<Option<String>, String>),

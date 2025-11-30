@@ -1715,34 +1715,63 @@ fn build_music_downloader(state: &AppState, theme_mode: ThemeMode) -> Element<'_
                 .spacing(0)
                 .width(Length::Fill),
                 Space::with_height(8),
-                container(
-                    text(&downloader.status)
-                        .size(12)
-                        .style(iced::theme::Text::Color(
-                            if downloader.status.contains("Error")
-                                || downloader.status.contains("Failed")
-                            {
-                                colors.error
-                            } else if downloader.status.contains("Success")
-                                || downloader.status.contains("Found")
-                                || downloader.status.contains("Loaded")
-                            {
-                                colors.success
-                            } else if downloader.status.contains("Please select")
-                                || downloader.status.contains("No download")
-                                || downloader.status.contains("No songs selected")
-                            {
-                                colors.warning
-                            } else if downloader.status.contains("Loading")
-                                || downloader.status.contains("Downloading")
-                            {
-                                colors.info
-                            } else {
-                                colors.text_secondary
-                            }
-                        ))
-                        .width(Length::Fill)
-                )
+                container({
+                    let icon: Element<Message> =
+                        if downloader.status.contains("Successfully downloaded")
+                            || (downloader.status.contains("Downloaded")
+                                && !downloader.status.contains("error"))
+                        {
+                            icon_to_text(Bootstrap::CheckCircle)
+                                .size(14.0)
+                                .style(iced::theme::Text::Color(colors.success))
+                                .into()
+                        } else if downloader.status.contains("Error")
+                            || downloader.status.contains("Failed")
+                        {
+                            icon_to_text(Bootstrap::XCircle)
+                                .size(14.0)
+                                .style(iced::theme::Text::Color(colors.error))
+                                .into()
+                        } else {
+                            Space::with_width(0).into()
+                        };
+
+                    row![
+                        icon,
+                        Space::with_width(8),
+                        text(&downloader.status)
+                            .size(12)
+                            .style(iced::theme::Text::Color(
+                                if downloader.status.contains("Error")
+                                    || downloader.status.contains("Failed")
+                                {
+                                    colors.error
+                                } else if downloader.status.contains("Successfully downloaded")
+                                    || (downloader.status.contains("Downloaded")
+                                        && !downloader.status.contains("error"))
+                                    || downloader.status.contains("Found")
+                                    || downloader.status.contains("Loaded")
+                                {
+                                    colors.success
+                                } else if downloader.status.contains("Please select")
+                                    || downloader.status.contains("No download")
+                                    || downloader.status.contains("No songs selected")
+                                {
+                                    colors.warning
+                                } else if downloader.status.contains("Loading")
+                                    || downloader.status.contains("Downloading")
+                                {
+                                    colors.info
+                                } else {
+                                    colors.text_secondary
+                                }
+                            ))
+                            .width(Length::Fill),
+                    ]
+                    .spacing(0)
+                    .align_items(Alignment::Center)
+                    .width(Length::Fill)
+                })
                 .width(Length::Fill)
                 .padding([10, 12])
                 .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
