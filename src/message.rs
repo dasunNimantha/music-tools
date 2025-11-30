@@ -27,9 +27,20 @@ pub enum Message {
     FileSelected(usize),
     MetadataLoaded(usize, Result<FileMetadata, String>),
 
-    // Music Downloader (placeholder)
-    DownloadUrlChanged(String),
-    StartDownload,
+    // Music Downloader
+    LoadArtists,
+    LoadArtistsByLetter(char),
+    ArtistsLoaded(Result<Vec<crate::utils::scraper::Artist>, String>),
+    DownloaderArtistSearchChanged(String),
+    FilterArtists,
+    SelectArtist(usize),
+    LoadArtistSongs,
+    ArtistSongsLoaded(Result<Vec<crate::utils::scraper::Song>, String>),
+    ToggleSongSelection(usize),
+    SelectDownloadDirectory,
+    DownloadDirectorySelected(Option<PathBuf>),
+    DownloadSelectedSongs,
+    DownloadComplete(Result<Vec<String>, String>),
 
     // Audio Converter (placeholder)
     SelectConvertFiles,

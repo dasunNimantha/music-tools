@@ -882,18 +882,27 @@ fn build_metadata_panel(state: &AppState, theme_mode: ThemeMode) -> Element<'sta
         .into()
     } else {
         // Show single status line with icon
-        let (icon, text_color, status_text) = if state.status.starts_with("Error") || state.status.contains("error") {
-            (Some(Bootstrap::XCircle), colors.error, state.status.clone())
-        } else if state.status.starts_with("✓") || state.status.contains("Success") {
-            // Remove the checkmark character from the text since we're showing an icon
-            let cleaned = state.status.strip_prefix("✓ ").unwrap_or(&state.status).to_string();
-            (Some(Bootstrap::CheckCircle), colors.success, cleaned)
-        } else if state.status.contains("Processing") {
-            (Some(Bootstrap::ArrowClockwise), colors.info, state.status.clone())
-        } else {
-            (None, colors.text_secondary, state.status.clone())
-        };
-        
+        let (icon, text_color, status_text) =
+            if state.status.starts_with("Error") || state.status.contains("error") {
+                (Some(Bootstrap::XCircle), colors.error, state.status.clone())
+            } else if state.status.starts_with("✓") || state.status.contains("Success") {
+                // Remove the checkmark character from the text since we're showing an icon
+                let cleaned = state
+                    .status
+                    .strip_prefix("✓ ")
+                    .unwrap_or(&state.status)
+                    .to_string();
+                (Some(Bootstrap::CheckCircle), colors.success, cleaned)
+            } else if state.status.contains("Processing") {
+                (
+                    Some(Bootstrap::ArrowClockwise),
+                    colors.info,
+                    state.status.clone(),
+                )
+            } else {
+                (None, colors.text_secondary, state.status.clone())
+            };
+
         let status_row = if let Some(icon_type) = icon {
             row![
                 icon_to_text(icon_type)
@@ -908,14 +917,12 @@ fn build_metadata_panel(state: &AppState, theme_mode: ThemeMode) -> Element<'sta
             .spacing(0)
             .align_items(Alignment::Center)
         } else {
-            row![
-                text(&status_text)
-                    .size(12)
-                    .style(iced::theme::Text::Color(text_color))
-                    .width(Length::Fill),
-            ]
+            row![text(&status_text)
+                .size(12)
+                .style(iced::theme::Text::Color(text_color))
+                .width(Length::Fill),]
         };
-        
+
         container(status_row)
             .width(Length::Fill)
             .padding([10, 12])
@@ -1175,78 +1182,526 @@ fn build_music_downloader(state: &AppState, theme_mode: ThemeMode) -> Element<'_
     let colors = get_colors(theme_mode);
     let header = build_app_header(
         "Music Downloader",
-        "Download music from online sources",
+        "Download music from songhub.lk",
         theme_mode,
     );
 
-    let content = container(
+    let downloader = &state.downloader_state;
+
+    // Artist search section
+    let search_section = container(
         column![
-            container(
-                icon_to_text(Bootstrap::CloudArrowDown)
-                    .size(64.0)
-                    .style(iced::theme::Text::Color(Color::from_rgb(0.4, 0.8, 0.4)))
-            )
-            .width(Length::Fixed(120.0))
-            .height(Length::Fixed(100.0))
-            .center_x()
-            .center_y()
-            .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
-                mode: theme_mode
-            }))),
-            Space::with_height(24),
-            text("Music Downloader")
-                .size(20)
-                .style(iced::theme::Text::Color(colors.text_primary)),
-            Space::with_height(8),
-            text("Download music from YouTube, SoundCloud, and more")
-                .size(13)
-                .style(iced::theme::Text::Color(colors.text_secondary)),
-            Space::with_height(24),
-            text("Enter URL")
-                .size(11)
-                .style(iced::theme::Text::Color(colors.text_secondary))
-                .width(Length::Fixed(400.0)),
-            Space::with_height(6),
-            text_input("https://youtube.com/watch?v=...", &state.download_url)
-                .on_input(Message::DownloadUrlChanged)
-                .width(Length::Fixed(400.0))
+            text("Search Artists")
+                .size(15)
+                .style(iced::theme::Text::Color(colors.text_primary))
+                .width(Length::Fill),
+            Space::with_height(10),
+            text_input("Type a letter (A-Z) to load artists or type to search...", &downloader.artist_search_query)
+                .on_input(Message::DownloaderArtistSearchChanged)
+                .width(Length::Fill)
                 .padding(12)
                 .style(iced::theme::TextInput::Custom(Box::new(TextInputStyle {
                     mode: theme_mode
                 }))),
-            Space::with_height(16),
-            button("Download")
-                .style(iced::theme::Button::Custom(Box::new(PrimaryButtonStyle {
-                    mode: theme_mode
-                })))
-                .on_press(Message::StartDownload)
-                .padding([12, 40])
-                .width(Length::Fixed(400.0)),
-            Space::with_height(16),
-            container(
-                text(&state.download_status)
-                    .size(12)
-                    .style(iced::theme::Text::Color(colors.text_secondary))
-            )
-            .width(Length::Fixed(400.0))
-            .padding([10, 12])
-            .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
-                mode: theme_mode
-            }))),
+            Space::with_height(8),
+            row![
+                icon_to_text(Bootstrap::InfoCircle)
+                    .size(12.0)
+                    .style(iced::theme::Text::Color(colors.text_disabled)),
+                Space::with_width(6),
+                text("Tip: Type a single letter (e.g., 'g') to load all artists starting with that letter")
+                    .size(11)
+                    .style(iced::theme::Text::Color(colors.text_disabled))
+                    .width(Length::Fill),
+            ]
+            .spacing(0)
+            .align_items(Alignment::Center)
+            .width(Length::Fill),
         ]
         .spacing(0)
-        .align_items(Alignment::Center),
+        .width(Length::Fill),
     )
     .width(Length::Fill)
-    .height(Length::Fill)
-    .center_x()
-    .center_y();
+    .padding([14, 16, 14, 16])
+    .style(iced::theme::Container::Custom(Box::new(CardStyle { mode: theme_mode })));
 
-    column![header, content,]
+    // Main content: Artists list or Songs list
+    let main_content: Element<Message> =
+        if let Some(ref selected_artist) = downloader.selected_artist {
+            // Show songs for selected artist
+            if downloader.loading_songs {
+                // Pulsing/shining effect like in metadata editor
+                let pulse = ((state.loading_rotation * 3.0).sin() + 1.0) / 2.0;
+                let icon_color =
+                    Color::from_rgb(0.3 + pulse * 0.4, 0.5 + pulse * 0.3, 0.85 + pulse * 0.15);
+
+                container(
+                    column![
+                        container(
+                            icon_to_text(Bootstrap::ArrowClockwise)
+                                .size(40.0)
+                                .style(iced::theme::Text::Color(icon_color))
+                        )
+                        .width(Length::Fixed(70.0))
+                        .height(Length::Fixed(60.0))
+                        .center_x()
+                        .center_y()
+                        .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
+                            mode: theme_mode
+                        }))),
+                        Space::with_height(12),
+                        text(format!("Loading songs for {}...", selected_artist.name))
+                            .size(14)
+                            .style(iced::theme::Text::Color(colors.text_secondary))
+                            .width(Length::Fill)
+                            .horizontal_alignment(iced::alignment::Horizontal::Center),
+                        text("Please wait")
+                            .size(12)
+                            .style(iced::theme::Text::Color(colors.text_disabled))
+                            .width(Length::Fill)
+                            .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    ]
+                    .spacing(4)
+                    .align_items(Alignment::Center),
+                )
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x()
+                .center_y()
+                .into()
+            } else if downloader.search_results.is_empty() {
+                container(
+                    column![
+                        container(
+                            icon_to_text(Bootstrap::MusicNoteBeamed)
+                                .size(40.0)
+                                .style(iced::theme::Text::Color(Color::from_rgb(0.4, 0.8, 0.4)))
+                        )
+                        .width(Length::Fixed(70.0))
+                        .height(Length::Fixed(60.0))
+                        .center_x()
+                        .center_y()
+                        .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
+                            mode: theme_mode
+                        }))),
+                        Space::with_height(12),
+                        text(format!("No songs found for {}", selected_artist.name))
+                            .size(14)
+                            .style(iced::theme::Text::Color(colors.text_secondary))
+                            .width(Length::Fill)
+                            .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    ]
+                    .spacing(4)
+                    .align_items(Alignment::Center),
+                )
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x()
+                .center_y()
+                .into()
+            } else {
+                // Show songs list
+                let mut songs_column = Column::new().spacing(4).width(Length::Fill);
+
+                for (index, song) in downloader.search_results.iter().enumerate() {
+                    let is_selected = downloader.selected_songs.contains(&index);
+                    let song_item = container(
+                        row![
+                            checkbox("", is_selected)
+                                .on_toggle(move |_| Message::ToggleSongSelection(index))
+                                .style(iced::theme::Checkbox::Custom(Box::new(ToggleStyle {
+                                    mode: theme_mode
+                                }))),
+                            Space::with_width(10),
+                            text(&song.title)
+                                .size(13)
+                                .style(iced::theme::Text::Color(colors.text_primary))
+                                .width(Length::Fill),
+                        ]
+                        .spacing(0)
+                        .align_items(Alignment::Center)
+                        .width(Length::Fill),
+                    )
+                    .width(Length::Fill)
+                    .padding([8, 12])
+                    .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
+                        mode: theme_mode,
+                    })));
+
+                    songs_column = songs_column.push(song_item);
+                }
+
+                container(
+                    scrollable(container(songs_column).width(Length::Fill).padding([8, 10]))
+                        .height(Length::Fill),
+                )
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(iced::theme::Container::Custom(Box::new(CardStyle {
+                    mode: theme_mode,
+                })))
+                .into()
+            }
+        } else {
+            // Show artists list
+            if downloader.loading_artists {
+                // Pulsing/shining effect like in metadata editor
+                let pulse = ((state.loading_rotation * 3.0).sin() + 1.0) / 2.0;
+                let icon_color =
+                    Color::from_rgb(0.3 + pulse * 0.4, 0.5 + pulse * 0.3, 0.85 + pulse * 0.15);
+
+                container(
+                    column![
+                        container(
+                            icon_to_text(Bootstrap::ArrowClockwise)
+                                .size(40.0)
+                                .style(iced::theme::Text::Color(icon_color))
+                        )
+                        .width(Length::Fixed(70.0))
+                        .height(Length::Fixed(60.0))
+                        .center_x()
+                        .center_y()
+                        .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
+                            mode: theme_mode
+                        }))),
+                        Space::with_height(12),
+                        text(if downloader.artist_search_query.trim().len() == 1 {
+                            format!(
+                                "Loading artists starting with '{}'...",
+                                downloader.artist_search_query.trim().to_uppercase()
+                            )
+                        } else {
+                            "Loading artists...".to_string()
+                        })
+                        .size(14)
+                        .style(iced::theme::Text::Color(colors.text_secondary))
+                        .width(Length::Fill)
+                        .horizontal_alignment(iced::alignment::Horizontal::Center),
+                        text("Please wait")
+                            .size(12)
+                            .style(iced::theme::Text::Color(colors.text_disabled))
+                            .width(Length::Fill)
+                            .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    ]
+                    .spacing(4)
+                    .align_items(Alignment::Center),
+                )
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x()
+                .center_y()
+                .into()
+            } else if downloader.filtered_artists.is_empty() {
+                let (title, subtitle, show_button) =
+                    if downloader.all_artists.is_empty() && !downloader.loading_artists {
+                        (
+                            "No artists loaded",
+                            "Click the button below to load artists",
+                            true,
+                        )
+                    } else if downloader.loading_artists {
+                        ("Loading artists...", "Please wait", false)
+                    } else if !downloader.artist_search_query.trim().is_empty() {
+                        ("No artists found", "Try a different search term", false)
+                    } else {
+                        (
+                            "No artists available",
+                            "Please wait for artists to load",
+                            false,
+                        )
+                    };
+
+                let mut content =
+                    column![
+                        container(
+                            icon_to_text(if downloader.loading_artists {
+                                Bootstrap::ArrowClockwise
+                            } else {
+                                Bootstrap::CloudArrowDown
+                            })
+                            .size(40.0)
+                            .style(iced::theme::Text::Color(if downloader.loading_artists {
+                                colors.info
+                            } else {
+                                Color::from_rgb(0.4, 0.8, 0.4)
+                            }))
+                        )
+                        .width(Length::Fixed(70.0))
+                        .height(Length::Fixed(60.0))
+                        .center_x()
+                        .center_y()
+                        .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
+                            mode: theme_mode
+                        }))),
+                        Space::with_height(12),
+                        text(title)
+                            .size(14)
+                            .style(iced::theme::Text::Color(colors.text_secondary))
+                            .width(Length::Fill)
+                            .horizontal_alignment(iced::alignment::Horizontal::Center),
+                        text(subtitle)
+                            .size(12)
+                            .style(iced::theme::Text::Color(colors.text_disabled))
+                            .width(Length::Fill)
+                            .horizontal_alignment(iced::alignment::Horizontal::Center),
+                    ]
+                    .spacing(4)
+                    .align_items(Alignment::Center);
+
+                if show_button {
+                    content = content.push(Space::with_height(16));
+                    content = content.push(
+                        button("Load Artists")
+                            .style(iced::theme::Button::Custom(Box::new(PrimaryButtonStyle {
+                                mode: theme_mode,
+                            })))
+                            .on_press(Message::LoadArtists)
+                            .padding([10, 20]),
+                    );
+                }
+
+                container(content)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center_x()
+                    .center_y()
+                    .into()
+            } else {
+                // Show artists list
+                let mut artists_column = Column::new().spacing(4).width(Length::Fill);
+
+                for (index, artist) in downloader.filtered_artists.iter().enumerate() {
+                    let is_selected = downloader
+                        .selected_artist
+                        .as_ref()
+                        .map(|a| a.slug == artist.slug)
+                        .unwrap_or(false);
+                    let artist_item = container(
+                        button(
+                            row![
+                                icon_to_text(Bootstrap::Person).size(14.0).style(
+                                    iced::theme::Text::Color(if is_selected {
+                                        Color::WHITE
+                                    } else {
+                                        colors.cosmic_accent
+                                    })
+                                ),
+                                Space::with_width(10),
+                                text(&artist.name)
+                                    .size(14)
+                                    .style(iced::theme::Text::Color(if is_selected {
+                                        Color::WHITE
+                                    } else {
+                                        colors.text_primary
+                                    }))
+                                    .width(Length::Fill),
+                            ]
+                            .spacing(0)
+                            .align_items(Alignment::Center)
+                            .width(Length::Fill),
+                        )
+                        .style(iced::theme::Button::Custom(Box::new(
+                            TransparentButtonStyle {
+                                mode: theme_mode,
+                                is_selected,
+                            },
+                        )))
+                        .on_press(Message::SelectArtist(index))
+                        .width(Length::Fill)
+                        .padding([10, 14]),
+                    )
+                    .width(Length::Fill)
+                    .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
+                        mode: theme_mode,
+                    })));
+
+                    artists_column = artists_column.push(artist_item);
+                }
+
+                container(
+                    scrollable(
+                        container(artists_column)
+                            .width(Length::Fill)
+                            .padding([8, 10]),
+                    )
+                    .height(Length::Fill),
+                )
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(iced::theme::Container::Custom(Box::new(CardStyle {
+                    mode: theme_mode,
+                })))
+                .into()
+            }
+        };
+
+    // Actions section
+    let actions_section = if downloader.selected_artist.is_some() {
+        // Show back button and download controls when artist is selected
+        container(
+            column![
+                row![
+                    button(
+                        row![
+                            icon_to_text(Bootstrap::ArrowLeft)
+                                .size(14.0)
+                                .style(iced::theme::Text::Color(Color::WHITE)),
+                            Space::with_width(8),
+                            text("Back to Artists").size(14),
+                        ]
+                        .spacing(0)
+                        .align_items(Alignment::Center)
+                    )
+                    .style(iced::theme::Button::Custom(Box::new(
+                        SecondaryButtonStyle { mode: theme_mode }
+                    )))
+                    .on_press(Message::SelectArtist(usize::MAX)) // Clear selection
+                    .padding([10, 16])
+                    .width(Length::Fill),
+                    Space::with_width(10),
+                    button("Select Download Directory")
+                        .style(iced::theme::Button::Custom(Box::new(
+                            SecondaryButtonStyle { mode: theme_mode }
+                        )))
+                        .on_press(Message::SelectDownloadDirectory)
+                        .padding([10, 16])
+                        .width(Length::Fill),
+                    Space::with_width(10),
+                    button(if downloader.downloading {
+                        row![
+                            icon_to_text(Bootstrap::ArrowClockwise)
+                                .size(14.0)
+                                .style(iced::theme::Text::Color(Color::WHITE)),
+                            Space::with_width(8),
+                            text("Downloading...").size(14),
+                        ]
+                        .spacing(0)
+                        .align_items(Alignment::Center)
+                    } else {
+                        row![
+                            icon_to_text(Bootstrap::CloudArrowDown)
+                                .size(14.0)
+                                .style(iced::theme::Text::Color(Color::WHITE)),
+                            Space::with_width(8),
+                            text(format!("Download ({})", downloader.selected_songs.len()))
+                                .size(14),
+                        ]
+                        .spacing(0)
+                        .align_items(Alignment::Center)
+                    })
+                    .style(iced::theme::Button::Custom(Box::new(PrimaryButtonStyle {
+                        mode: theme_mode
+                    })))
+                    .on_press_maybe(
+                        if downloader.downloading || downloader.selected_songs.is_empty() {
+                            None
+                        } else {
+                            Some(Message::DownloadSelectedSongs)
+                        }
+                    )
+                    .padding([10, 16])
+                    .width(Length::Fill),
+                ]
+                .spacing(0)
+                .width(Length::Fill),
+                Space::with_height(8),
+                container(
+                    text(if let Some(ref path) = downloader.download_path {
+                        format!("Download to: {}", path.display())
+                    } else {
+                        "No download directory selected".to_string()
+                    })
+                    .size(11)
+                    .style(iced::theme::Text::Color(
+                        if downloader.download_path.is_some() {
+                            colors.success
+                        } else {
+                            colors.text_disabled
+                        }
+                    ))
+                    .width(Length::Fill)
+                )
+                .width(Length::Fill)
+                .padding([8, 10])
+                .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
+                    mode: theme_mode
+                }))),
+                Space::with_height(8),
+                container(
+                    text(&downloader.status)
+                        .size(12)
+                        .style(iced::theme::Text::Color(
+                            if downloader.status.contains("Error")
+                                || downloader.status.contains("Failed")
+                            {
+                                colors.error
+                            } else if downloader.status.contains("Success") {
+                                colors.success
+                            } else {
+                                colors.text_secondary
+                            }
+                        ))
+                        .width(Length::Fill)
+                )
+                .width(Length::Fill)
+                .padding([10, 12])
+                .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
+                    mode: theme_mode
+                }))),
+            ]
+            .spacing(0)
+            .width(Length::Fill),
+        )
+        .width(Length::Fill)
+        .padding([12, 14, 12, 14])
+        .style(iced::theme::Container::Custom(Box::new(CardStyle {
+            mode: theme_mode,
+        })))
+    } else {
+        // Show simple status when no artist selected
+        container(
+            container(
+                text(&downloader.status)
+                    .size(12)
+                    .style(iced::theme::Text::Color(colors.text_secondary))
+                    .width(Length::Fill),
+            )
+            .width(Length::Fill)
+            .padding([10, 12])
+            .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
+                mode: theme_mode,
+            }))),
+        )
+        .width(Length::Fill)
+        .padding([12, 14, 12, 14])
+        .style(iced::theme::Container::Custom(Box::new(CardStyle {
+            mode: theme_mode,
+        })))
+    };
+
+    column![
+        header,
+        Space::with_height(8),
+        container(search_section)
+            .width(Length::Fill)
+            .padding([0, 12, 0, 12]),
+        Space::with_height(12),
+        row![container(main_content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding([0, 6, 0, 12]),]
         .spacing(0)
         .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+        .height(Length::Fill),
+        Space::with_height(12),
+        container(actions_section)
+            .width(Length::Fill)
+            .padding([0, 12, 12, 12]),
+    ]
+    .spacing(0)
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into()
 }
 
 // ============== AUDIO CONVERTER (PLACEHOLDER) ==============

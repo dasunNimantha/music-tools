@@ -3,6 +3,7 @@ use crate::message::Message;
 use crate::metadata::{process_files, read_file_metadata};
 use crate::model::{AppState, Screen};
 use crate::theme::{cosmic_theme, ThemeMode};
+use crate::utils::scraper::SongHubScraper;
 use crate::view::build_view;
 use iced::time;
 use iced::{Application, Command, Subscription, Theme};
@@ -40,9 +41,23 @@ impl Application for MusicToolsApp {
 
     fn update(&mut self, message: Message) -> Command<Message> {
         match message {
-            // Navigation
             Message::NavigateTo(screen) => {
                 self.state.current_screen = screen;
+                if screen == Screen::MusicDownloader
+                    && self.state.downloader_state.all_artists.is_empty()
+                    && !self.state.downloader_state.loading_artists
+                {
+                    self.state.downloader_state.loading_artists = true;
+                    self.state.downloader_state.status =
+                        "Loading artists from songhub.lk...".to_string();
+                    return Command::perform(
+                        async {
+                            let scraper = SongHubScraper::new()?;
+                            scraper.get_artists_by_letter(None).await
+                        },
+                        |result| Message::ArtistsLoaded(result.map_err(|e| e.to_string())),
+                    );
+                }
                 Command::none()
             }
             Message::GoHome => {
@@ -50,7 +65,6 @@ impl Application for MusicToolsApp {
                 Command::none()
             }
 
-            // Metadata Editor
             Message::SelectFiles => {
                 if let Some(selected_files) = select_files() {
                     self.state.loading_files = true;
@@ -240,17 +254,277 @@ impl Application for MusicToolsApp {
                 Command::none()
             }
 
-            // Music Downloader (placeholder)
-            Message::DownloadUrlChanged(url) => {
-                self.state.download_url = url;
+            Message::LoadArtists => {
+                self.state.downloader_state.loading_artists = true;
+                self.state.downloader_state.status =
+                    "Loading artists from songhub.lk...".to_string();
+                Command::perform(
+                    async {
+                        let scraper = SongHubScraper::new()?;
+                        scraper.get_artists_by_letter(None).await
+                    },
+                    |result| Message::ArtistsLoaded(result.map_err(|e| e.to_string())),
+                )
+            }
+            Message::LoadArtistsByLetter(letter) => {
+                self.state.downloader_state.loading_artists = true;
+                self.state.downloader_state.status = format!(
+                    "Loading artists starting with '{}'...",
+                    letter.to_uppercase().collect::<String>()
+                );
+                Command::perform(
+                    async move {
+                        let scraper = SongHubScraper::new()?;
+                        scraper.get_artists_by_letter(Some(letter)).await
+                    },
+                    |result| Message::ArtistsLoaded(result.map_err(|e| e.to_string())),
+                )
+            }
+            Message::ArtistsLoaded(result) => {
+                self.state.downloader_state.loading_artists = false;
+                match result {
+                    Ok(artists) => {
+                        if artists.is_empty() {
+                            self.state.downloader_state.status = "Warning: No artists found on the page. The page structure may have changed.".to_string();
+                        } else {
+                            self.state.downloader_state.all_artists = artists.clone();
+                            self.state.downloader_state.filtered_artists = artists;
+                            self.state.downloader_state.status = format!(
+                                "Loaded {} artists",
+                                self.state.downloader_state.all_artists.len()
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        self.state.downloader_state.status = format!("Failed to load artists: {}. Please check your internet connection and try again.", e);
+                    }
+                }
                 Command::none()
             }
-            Message::StartDownload => {
-                self.state.download_status = "This feature is coming soon!".to_string();
+            Message::DownloaderArtistSearchChanged(query) => {
+                let trimmed = query.trim();
+                let was_single_letter =
+                    self.state.downloader_state.artist_search_query.trim().len() == 1;
+                let is_single_letter = trimmed.len() == 1;
+
+                self.state.downloader_state.artist_search_query = query.clone();
+
+                if is_single_letter {
+                    let letter = trimmed.chars().next().unwrap();
+                    if letter.is_alphabetic() {
+                        self.state.downloader_state.loading_artists = true;
+                        self.state.downloader_state.status = format!(
+                            "Loading artists starting with '{}'...",
+                            letter.to_uppercase().collect::<String>()
+                        );
+
+                        return Command::perform(
+                            async move {
+                                let scraper = SongHubScraper::new()?;
+                                scraper.get_artists_by_letter(Some(letter)).await
+                            },
+                            |result| Message::ArtistsLoaded(result.map_err(|e| e.to_string())),
+                        );
+                    }
+                } else if was_single_letter && !is_single_letter {
+                    self.state.downloader_state.loading_artists = false;
+                }
+
+                self.state.downloader_state.filter_artists();
+                Command::none()
+            }
+            Message::FilterArtists => {
+                self.state.downloader_state.filter_artists();
+                Command::none()
+            }
+            Message::SelectArtist(index) => {
+                if index == usize::MAX {
+                    self.state.downloader_state.selected_artist = None;
+                    self.state.downloader_state.search_results.clear();
+                    self.state.downloader_state.selected_songs.clear();
+                    self.state.downloader_state.status = "Select an artist".to_string();
+                } else if index < self.state.downloader_state.filtered_artists.len() {
+                    let artist = self.state.downloader_state.filtered_artists[index].clone();
+                    self.state.downloader_state.selected_artist = Some(artist.clone());
+                    self.state.downloader_state.search_results.clear();
+                    self.state.downloader_state.selected_songs.clear();
+                    self.state.downloader_state.loading_songs = true;
+                    self.state.downloader_state.status =
+                        format!("Loading songs for {}...", artist.name);
+                    return Command::perform(
+                        async move {
+                            let scraper = SongHubScraper::new()?;
+                            scraper.get_artist_songs(&artist.slug).await
+                        },
+                        |result| Message::ArtistSongsLoaded(result.map_err(|e| e.to_string())),
+                    );
+                }
+                Command::none()
+            }
+            Message::LoadArtistSongs => {
+                if let Some(ref artist) = self.state.downloader_state.selected_artist {
+                    let slug = artist.slug.clone();
+                    Command::perform(
+                        async move {
+                            let scraper = SongHubScraper::new()?;
+                            scraper.get_artist_songs(&slug).await
+                        },
+                        |result| Message::ArtistSongsLoaded(result.map_err(|e| e.to_string())),
+                    )
+                } else {
+                    Command::none()
+                }
+            }
+            Message::ArtistSongsLoaded(result) => {
+                self.state.downloader_state.loading_songs = false;
+                match result {
+                    Ok(songs) => {
+                        self.state.downloader_state.search_results = songs;
+                        if let Some(ref artist) = self.state.downloader_state.selected_artist {
+                            self.state.downloader_state.status = format!(
+                                "Found {} song(s) for {}",
+                                self.state.downloader_state.search_results.len(),
+                                artist.name
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        self.state.downloader_state.status = format!("Failed to load songs: {}", e);
+                    }
+                }
+                Command::none()
+            }
+            Message::ToggleSongSelection(index) => {
+                if let Some(pos) = self
+                    .state
+                    .downloader_state
+                    .selected_songs
+                    .iter()
+                    .position(|&i| i == index)
+                {
+                    self.state.downloader_state.selected_songs.remove(pos);
+                } else {
+                    self.state.downloader_state.selected_songs.push(index);
+                }
+                self.state.downloader_state.status = format!(
+                    "{} song(s) selected",
+                    self.state.downloader_state.selected_songs.len()
+                );
+                Command::none()
+            }
+            Message::SelectDownloadDirectory => {
+                if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                    Command::perform(
+                        async move { Some(path) },
+                        Message::DownloadDirectorySelected,
+                    )
+                } else {
+                    Command::none()
+                }
+            }
+            Message::DownloadDirectorySelected(path) => {
+                self.state.downloader_state.download_path = path;
+                if self.state.downloader_state.download_path.is_some() {
+                    self.state.downloader_state.status = "Download directory selected".to_string();
+                }
+                Command::none()
+            }
+            Message::DownloadSelectedSongs => {
+                if self.state.downloader_state.selected_songs.is_empty() {
+                    self.state.downloader_state.status = "No songs selected".to_string();
+                    return Command::none();
+                }
+                if self.state.downloader_state.download_path.is_none() {
+                    self.state.downloader_state.status =
+                        "Please select download directory".to_string();
+                    return Command::none();
+                }
+
+                let songs = self.state.downloader_state.search_results.clone();
+                let selected_indices = self.state.downloader_state.selected_songs.clone();
+                let download_path = self.state.downloader_state.download_path.clone().unwrap();
+
+                self.state.downloader_state.downloading = true;
+                self.state.downloader_state.status = "Starting download...".to_string();
+
+                Command::perform(
+                    async move {
+                        let scraper = SongHubScraper::new()?;
+                        let mut errors = Vec::new();
+
+                        for &song_idx in selected_indices.iter() {
+                            if song_idx >= songs.len() {
+                                continue;
+                            }
+
+                            let song = &songs[song_idx];
+
+                            let download_url = match scraper.get_download_url(&song.url).await {
+                                Ok(Some(url)) => url,
+                                Ok(None) => {
+                                    errors.push(format!("No download URL for: {}", song.title));
+                                    continue;
+                                }
+                                Err(e) => {
+                                    errors.push(format!(
+                                        "Failed to get URL for {}: {}",
+                                        song.title, e
+                                    ));
+                                    continue;
+                                }
+                            };
+
+                            let safe_title = song
+                                .title
+                                .chars()
+                                .map(|c| match c {
+                                    '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
+                                    _ => c,
+                                })
+                                .collect::<String>()
+                                .trim()
+                                .to_string();
+                            let filename = format!("{}.mp3", safe_title);
+                            let output_path = download_path.join(&filename);
+
+                            if let Err(e) = scraper.download_song(&download_url, &output_path).await
+                            {
+                                errors.push(format!("Failed to download {}: {}", song.title, e));
+                            }
+                        }
+
+                        if errors.is_empty() {
+                            Ok(Vec::new())
+                        } else {
+                            Ok(errors)
+                        }
+                    },
+                    |result: Result<Vec<String>, anyhow::Error>| {
+                        Message::DownloadComplete(result.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+            Message::DownloadComplete(result) => {
+                self.state.downloader_state.downloading = false;
+                match result {
+                    Ok(errors) => {
+                        if errors.is_empty() {
+                            self.state.downloader_state.status = format!(
+                                "Successfully downloaded {} song(s)",
+                                self.state.downloader_state.selected_songs.len()
+                            );
+                        } else {
+                            self.state.downloader_state.status =
+                                format!("Downloaded with {} error(s)", errors.len());
+                        }
+                    }
+                    Err(e) => {
+                        self.state.downloader_state.status = format!("Download failed: {}", e);
+                    }
+                }
                 Command::none()
             }
 
-            // Audio Converter (placeholder)
             Message::SelectConvertFiles => {
                 self.state.convert_status = "This feature is coming soon!".to_string();
                 Command::none()
@@ -264,7 +538,6 @@ impl Application for MusicToolsApp {
                 Command::none()
             }
 
-            // Theme
             Message::ToggleTheme => {
                 self.theme_mode = match self.theme_mode {
                     ThemeMode::Dark => ThemeMode::Light,
@@ -273,15 +546,17 @@ impl Application for MusicToolsApp {
                 Command::none()
             }
 
-            // Animation
             Message::Tick(_) => {
-                if self.state.loading_files || self.state.processing {
+                if self.state.loading_files
+                    || self.state.processing
+                    || self.state.downloader_state.loading_artists
+                    || self.state.downloader_state.loading_songs
+                {
                     self.state.loading_rotation += 0.15;
                     if self.state.loading_rotation >= std::f32::consts::TAU {
                         self.state.loading_rotation = 0.0;
                     }
                 }
-                // If there's a pending folder scan, wait a few ticks then trigger
                 if self.state.pending_folder_scan.is_some() {
                     self.state.scan_delay_ticks += 1;
                     if self.state.scan_delay_ticks >= 5 {
@@ -303,7 +578,10 @@ impl Application for MusicToolsApp {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        let active = self.state.loading_files || self.state.processing;
+        let active = self.state.loading_files
+            || self.state.processing
+            || self.state.downloader_state.loading_artists
+            || self.state.downloader_state.loading_songs;
         if active {
             time::every(Duration::from_millis(16)).map(Message::Tick)
         } else {
