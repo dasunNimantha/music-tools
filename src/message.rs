@@ -43,6 +43,9 @@ pub enum Message {
     DownloadDirectorySelected(Option<PathBuf>),
     DownloadSelectedSongs,
     DownloadComplete(Result<Vec<String>, String>),
+    PlaySong(usize),
+    StopSong,
+    StreamingUrlLoaded(usize, Result<Option<String>, String>),
 
     // Audio Converter (placeholder)
     SelectConvertFiles,

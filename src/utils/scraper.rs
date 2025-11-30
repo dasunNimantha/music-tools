@@ -393,6 +393,10 @@ impl SongHubScraper {
         Ok(songs)
     }
 
+    pub async fn get_streaming_url(&self, song_url: &str) -> Result<Option<String>> {
+        self.get_download_url(song_url).await
+    }
+
     pub async fn get_download_url(&self, song_url: &str) -> Result<Option<String>> {
         tokio::time::sleep(Duration::from_millis(300)).await;
 

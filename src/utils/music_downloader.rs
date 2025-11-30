@@ -15,6 +15,8 @@ pub struct MusicDownloaderState {
     pub search_results: Vec<Song>,
     pub selected_songs: Vec<usize>,
     pub download_path: Option<PathBuf>,
+    pub playing_song_index: Option<usize>,
+    pub streaming_url: Option<String>,
 }
 
 impl Default for MusicDownloaderState {
@@ -32,6 +34,8 @@ impl Default for MusicDownloaderState {
             search_results: Vec::new(),
             selected_songs: Vec::new(),
             download_path: None,
+            playing_song_index: None,
+            streaming_url: None,
         }
     }
 }

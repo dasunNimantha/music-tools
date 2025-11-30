@@ -4,6 +4,7 @@ use crate::metadata::{process_files, read_file_metadata};
 use crate::model::{AppState, Screen};
 use crate::settings::AppSettings;
 use crate::theme::{cosmic_theme, ThemeMode};
+use crate::utils::audio_player;
 use crate::utils::scraper::SongHubScraper;
 use crate::view::build_view;
 use iced::time;
@@ -54,6 +55,14 @@ impl Application for MusicToolsApp {
     fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::NavigateTo(screen) => {
+                // Stop any playing audio when navigating away
+                if self.state.current_screen == Screen::MusicDownloader
+                    && screen != Screen::MusicDownloader
+                {
+                    audio_player::stop_audio();
+                    self.state.downloader_state.playing_song_index = None;
+                    self.state.downloader_state.streaming_url = None;
+                }
                 self.state.current_screen = screen;
                 if screen == Screen::MusicDownloader
                     && self.state.downloader_state.all_artists.is_empty()
@@ -73,6 +82,12 @@ impl Application for MusicToolsApp {
                 Command::none()
             }
             Message::GoHome => {
+                // Stop any playing audio when going home
+                if self.state.current_screen == Screen::MusicDownloader {
+                    audio_player::stop_audio();
+                    self.state.downloader_state.playing_song_index = None;
+                    self.state.downloader_state.streaming_url = None;
+                }
                 self.state.current_screen = Screen::Home;
                 Command::none()
             }
@@ -367,6 +382,11 @@ impl Application for MusicToolsApp {
                 Command::none()
             }
             Message::SelectArtist(index) => {
+                // Stop any playing audio when going back to artists
+                audio_player::stop_audio();
+                self.state.downloader_state.playing_song_index = None;
+                self.state.downloader_state.streaming_url = None;
+
                 if index == usize::MAX {
                     self.state.downloader_state.selected_artist = None;
                     self.state.downloader_state.search_results.clear();
@@ -460,6 +480,70 @@ impl Application for MusicToolsApp {
             Message::DeselectAllSongs => {
                 self.state.downloader_state.selected_songs.clear();
                 self.state.downloader_state.status = "All songs deselected".to_string();
+                Command::none()
+            }
+            Message::PlaySong(index) => {
+                if index >= self.state.downloader_state.search_results.len() {
+                    return Command::none();
+                }
+
+                // Stop any currently playing song
+                if self.state.downloader_state.playing_song_index.is_some() {
+                    audio_player::stop_audio();
+                    self.state.downloader_state.playing_song_index = None;
+                    self.state.downloader_state.streaming_url = None;
+                }
+
+                let song = self.state.downloader_state.search_results[index].clone();
+                let song_url = song.url.clone();
+
+                self.state.downloader_state.playing_song_index = Some(index);
+                self.state.downloader_state.status = format!("Loading: {}...", song.title);
+
+                Command::perform(
+                    async move {
+                        let scraper = SongHubScraper::new()?;
+                        scraper.get_streaming_url(&song_url).await
+                    },
+                    move |result| {
+                        Message::StreamingUrlLoaded(index, result.map_err(|e| e.to_string()))
+                    },
+                )
+            }
+            Message::StreamingUrlLoaded(index, result) => match result {
+                Ok(Some(url)) => {
+                    self.state.downloader_state.streaming_url = Some(url.clone());
+                    if let Some(ref song) = self.state.downloader_state.search_results.get(index) {
+                        self.state.downloader_state.status = format!("Playing: {}...", song.title);
+                    }
+
+                    Command::perform(
+                        async move { audio_player::play_streaming_url(url).await },
+                        |_| Message::StopSong,
+                    )
+                }
+                Ok(None) => {
+                    self.state.downloader_state.playing_song_index = None;
+                    self.state.downloader_state.status = "No streaming URL found".to_string();
+                    Command::none()
+                }
+                Err(e) => {
+                    self.state.downloader_state.playing_song_index = None;
+                    self.state.downloader_state.status = format!("Failed to load audio: {}", e);
+                    Command::none()
+                }
+            },
+            Message::StopSong => {
+                audio_player::stop_audio();
+                self.state.downloader_state.playing_song_index = None;
+                self.state.downloader_state.streaming_url = None;
+                if let Some(ref artist) = self.state.downloader_state.selected_artist {
+                    self.state.downloader_state.status = format!(
+                        "Found {} song(s) for {}",
+                        self.state.downloader_state.search_results.len(),
+                        artist.name
+                    );
+                }
                 Command::none()
             }
             Message::SelectDownloadDirectory => {

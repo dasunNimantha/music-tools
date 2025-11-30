@@ -1,9 +1,9 @@
 use crate::message::Message;
 use crate::model::{AppState, Screen};
 use crate::theme::{
-    get_colors, CardStyle, DangerButtonStyle, FileItemStyle, HeaderStyle, PrimaryButtonStyle,
-    ProcessingButtonStyle, SecondaryButtonStyle, TextInputStyle, ThemeMode, ToggleStyle,
-    TransparentButtonStyle, WarningButtonStyle,
+    get_colors, CardStyle, DangerButtonStyle, FileItemStyle, HeaderStyle, PlayButtonStyle,
+    PrimaryButtonStyle, ProcessingButtonStyle, SecondaryButtonStyle, TextInputStyle, ThemeMode,
+    ToggleStyle, TransparentButtonStyle, WarningButtonStyle,
 };
 use iced::widget::{
     button, checkbox, column, container, row, scrollable, text, text_input, Column, Space,
@@ -1379,6 +1379,34 @@ fn build_music_downloader(state: &AppState, theme_mode: ThemeMode) -> Element<'_
 
                 for (index, song) in downloader.search_results.iter().enumerate() {
                     let is_selected = downloader.selected_songs.contains(&index);
+                    let is_playing = downloader.playing_song_index == Some(index);
+
+                    let play_button = if is_playing {
+                        button(
+                            icon_to_text(Bootstrap::StopCircle)
+                                .size(14.0)
+                                .style(iced::theme::Text::Color(Color::WHITE)),
+                        )
+                        .style(iced::theme::Button::Custom(Box::new(PlayButtonStyle {
+                            mode: theme_mode,
+                            is_playing: true,
+                        })))
+                        .on_press(Message::StopSong)
+                        .padding([6, 10])
+                    } else {
+                        button(
+                            icon_to_text(Bootstrap::PlayCircle)
+                                .size(14.0)
+                                .style(iced::theme::Text::Color(Color::WHITE)),
+                        )
+                        .style(iced::theme::Button::Custom(Box::new(PlayButtonStyle {
+                            mode: theme_mode,
+                            is_playing: false,
+                        })))
+                        .on_press(Message::PlaySong(index))
+                        .padding([6, 10])
+                    };
+
                     let song_item = container(
                         row![
                             checkbox("", is_selected)
@@ -1391,6 +1419,8 @@ fn build_music_downloader(state: &AppState, theme_mode: ThemeMode) -> Element<'_
                                 .size(13)
                                 .style(iced::theme::Text::Color(colors.text_primary))
                                 .width(Length::Fill),
+                            Space::with_width(10),
+                            play_button,
                         ]
                         .spacing(0)
                         .align_items(Alignment::Center)
