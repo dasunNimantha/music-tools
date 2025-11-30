@@ -2524,7 +2524,7 @@ dependencies = [
 
 [[package]]
 name = "music-tools"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "anyhow",
  "cargo-husky",
