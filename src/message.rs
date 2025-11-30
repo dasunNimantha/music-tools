@@ -37,6 +37,8 @@ pub enum Message {
     LoadArtistSongs,
     ArtistSongsLoaded(Result<Vec<crate::utils::scraper::Song>, String>),
     ToggleSongSelection(usize),
+    SelectAllSongs,
+    DeselectAllSongs,
     SelectDownloadDirectory,
     DownloadDirectorySelected(Option<PathBuf>),
     DownloadSelectedSongs,

@@ -180,6 +180,36 @@ impl iced::widget::container::StyleSheet for ElevatedCardStyle {
     }
 }
 
+pub struct HeaderStyle {
+    pub mode: ThemeMode,
+}
+
+impl iced::widget::container::StyleSheet for HeaderStyle {
+    type Style = iced::Theme;
+
+    fn appearance(&self, _style: &Self::Style) -> iced::widget::container::Appearance {
+        let colors = get_colors(self.mode);
+        iced::widget::container::Appearance {
+            text_color: None,
+            background: Some(iced::Background::Color(colors.surface_elevated)),
+            border: iced::Border {
+                color: colors.border_light,
+                width: 1.0,
+                radius: 12.0.into(),
+            },
+            shadow: iced::Shadow {
+                color: if self.mode == ThemeMode::Dark {
+                    Color::from_rgba(0.0, 0.0, 0.0, 0.15)
+                } else {
+                    Color::from_rgba(0.0, 0.0, 0.0, 0.08)
+                },
+                offset: iced::Vector::new(0.0, 2.0),
+                blur_radius: 8.0,
+            },
+        }
+    }
+}
+
 pub struct FileItemStyle {
     pub mode: ThemeMode,
 }

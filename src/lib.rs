@@ -11,6 +11,7 @@ pub mod file_dialog;
 pub mod message;
 pub mod metadata;
 pub mod model;
+pub mod settings;
 pub mod theme;
 pub mod utils;
 pub mod view;

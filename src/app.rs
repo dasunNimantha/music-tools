@@ -1,7 +1,8 @@
-use crate::file_dialog::{scan_folder_async, select_files, select_folder_dialog, select_image};
+use crate::file_dialog::{scan_folder_async, select_files, select_image};
 use crate::message::Message;
 use crate::metadata::{process_files, read_file_metadata};
 use crate::model::{AppState, Screen};
+use crate::settings::AppSettings;
 use crate::theme::{cosmic_theme, ThemeMode};
 use crate::utils::scraper::SongHubScraper;
 use crate::view::build_view;
@@ -21,9 +22,20 @@ impl Application for MusicToolsApp {
     type Flags = ();
 
     fn new(_flags: ()) -> (Self, Command<Message>) {
+        let settings = AppSettings::load();
+        let mut state = AppState::default();
+
+        // Load saved paths
+        if let Some(path) = settings.get_download_directory() {
+            state.downloader_state.download_path = Some(path);
+        }
+        if let Some(path) = settings.get_metadata_folder() {
+            state.last_metadata_folder = Some(path);
+        }
+
         (
             Self {
-                state: AppState::default(),
+                state,
                 theme_mode: ThemeMode::Dark,
             },
             Command::none(),
@@ -75,13 +87,32 @@ impl Application for MusicToolsApp {
                 }
             }
             Message::SelectFolder => {
-                Command::perform(select_folder_dialog(), Message::FolderSelected)
+                let saved_path = self.state.last_metadata_folder.clone();
+                Command::perform(
+                    async move {
+                        let mut dialog = rfd::AsyncFileDialog::new();
+                        if let Some(path) = saved_path {
+                            dialog = dialog.set_directory(&path);
+                        }
+                        dialog
+                            .pick_folder()
+                            .await
+                            .map(|handle| handle.path().to_path_buf())
+                    },
+                    Message::FolderSelected,
+                )
             }
             Message::FolderSelected(folder_path) => {
-                if let Some(path) = folder_path {
+                if let Some(path) = &folder_path {
                     self.state.loading_files = true;
-                    self.state.pending_folder_scan = Some(path);
+                    self.state.pending_folder_scan = Some(path.clone());
                     self.state.status = "Scanning folder for audio files...".to_string();
+
+                    // Save to settings
+                    let mut settings = AppSettings::load();
+                    settings.set_metadata_folder(Some(path));
+                    let _ = settings.save();
+                    self.state.last_metadata_folder = Some(path.clone());
                 }
                 Command::none()
             }
@@ -303,8 +334,6 @@ impl Application for MusicToolsApp {
             }
             Message::DownloaderArtistSearchChanged(query) => {
                 let trimmed = query.trim();
-                let was_single_letter =
-                    self.state.downloader_state.artist_search_query.trim().len() == 1;
                 let is_single_letter = trimmed.len() == 1;
 
                 self.state.downloader_state.artist_search_query = query.clone();
@@ -326,11 +355,11 @@ impl Application for MusicToolsApp {
                             |result| Message::ArtistsLoaded(result.map_err(|e| e.to_string())),
                         );
                     }
-                } else if was_single_letter && !is_single_letter {
-                    self.state.downloader_state.loading_artists = false;
                 }
 
-                self.state.downloader_state.filter_artists();
+                if !self.state.downloader_state.loading_artists {
+                    self.state.downloader_state.filter_artists();
+                }
                 Command::none()
             }
             Message::FilterArtists => {
@@ -381,11 +410,18 @@ impl Application for MusicToolsApp {
                     Ok(songs) => {
                         self.state.downloader_state.search_results = songs;
                         if let Some(ref artist) = self.state.downloader_state.selected_artist {
-                            self.state.downloader_state.status = format!(
+                            let status = format!(
                                 "Found {} song(s) for {}",
                                 self.state.downloader_state.search_results.len(),
                                 artist.name
                             );
+                            if let Some(ref path) = self.state.downloader_state.download_path {
+                                self.state.downloader_state.status =
+                                    format!("{}\nDownload to: {}", status, path.display());
+                            } else {
+                                self.state.downloader_state.status =
+                                    format!("{}\nPlease select download directory", status);
+                            }
                         }
                     }
                     Err(e) => {
@@ -412,8 +448,26 @@ impl Application for MusicToolsApp {
                 );
                 Command::none()
             }
+            Message::SelectAllSongs => {
+                self.state.downloader_state.selected_songs =
+                    (0..self.state.downloader_state.search_results.len()).collect();
+                self.state.downloader_state.status = format!(
+                    "{} song(s) selected",
+                    self.state.downloader_state.selected_songs.len()
+                );
+                Command::none()
+            }
+            Message::DeselectAllSongs => {
+                self.state.downloader_state.selected_songs.clear();
+                self.state.downloader_state.status = "All songs deselected".to_string();
+                Command::none()
+            }
             Message::SelectDownloadDirectory => {
-                if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                let mut dialog = rfd::FileDialog::new();
+                if let Some(ref saved_path) = self.state.downloader_state.download_path {
+                    dialog = dialog.set_directory(saved_path);
+                }
+                if let Some(path) = dialog.pick_folder() {
                     Command::perform(
                         async move { Some(path) },
                         Message::DownloadDirectorySelected,
@@ -423,9 +477,24 @@ impl Application for MusicToolsApp {
                 }
             }
             Message::DownloadDirectorySelected(path) => {
-                self.state.downloader_state.download_path = path;
-                if self.state.downloader_state.download_path.is_some() {
-                    self.state.downloader_state.status = "Download directory selected".to_string();
+                self.state.downloader_state.download_path = path.clone();
+                if let Some(ref p) = path {
+                    if let Some(ref artist) = self.state.downloader_state.selected_artist {
+                        self.state.downloader_state.status = format!(
+                            "Found {} song(s) for {}\nDownload to: {}",
+                            self.state.downloader_state.search_results.len(),
+                            artist.name,
+                            p.display()
+                        );
+                    } else {
+                        self.state.downloader_state.status =
+                            format!("Download to: {}", p.display());
+                    }
+
+                    // Save to settings
+                    let mut settings = AppSettings::load();
+                    settings.set_download_directory(Some(p));
+                    let _ = settings.save();
                 }
                 Command::none()
             }

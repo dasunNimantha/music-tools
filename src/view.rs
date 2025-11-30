@@ -1,7 +1,7 @@
 use crate::message::Message;
 use crate::model::{AppState, Screen};
 use crate::theme::{
-    get_colors, CardStyle, DangerButtonStyle, FileItemStyle, PrimaryButtonStyle,
+    get_colors, CardStyle, DangerButtonStyle, FileItemStyle, HeaderStyle, PrimaryButtonStyle,
     ProcessingButtonStyle, SecondaryButtonStyle, TextInputStyle, ThemeMode, ToggleStyle,
     TransparentButtonStyle, WarningButtonStyle,
 };
@@ -1301,7 +1301,81 @@ fn build_music_downloader(state: &AppState, theme_mode: ThemeMode) -> Element<'_
                 .into()
             } else {
                 // Show songs list
-                let mut songs_column = Column::new().spacing(4).width(Length::Fill);
+                let total_songs = downloader.search_results.len();
+                let selected_count = downloader.selected_songs.len();
+
+                let selection_info: Element<Message> = if selected_count > 0 {
+                    text(format!("{} selected", selected_count))
+                        .size(12)
+                        .style(iced::theme::Text::Color(colors.cosmic_accent))
+                        .into()
+                } else {
+                    Space::with_width(0).into()
+                };
+
+                // Fixed header with song count and buttons
+                let songs_header = container(
+                    row![
+                        text(format!("{} song(s)", total_songs))
+                            .size(13)
+                            .style(iced::theme::Text::Color(colors.text_secondary))
+                            .width(Length::Fill),
+                        selection_info,
+                        Space::with_width(8),
+                        button(
+                            row![
+                                icon_to_text(Bootstrap::CheckCircle)
+                                    .size(12.0)
+                                    .style(iced::theme::Text::Color(Color::WHITE)),
+                                Space::with_width(6),
+                                text("Select All").size(12),
+                            ]
+                            .spacing(0)
+                            .align_items(Alignment::Center)
+                        )
+                        .style(iced::theme::Button::Custom(Box::new(
+                            SecondaryButtonStyle { mode: theme_mode }
+                        )))
+                        .on_press_maybe(if selected_count == total_songs {
+                            None
+                        } else {
+                            Some(Message::SelectAllSongs)
+                        })
+                        .padding([6, 12]),
+                        Space::with_width(6),
+                        button(
+                            row![
+                                icon_to_text(Bootstrap::XCircle)
+                                    .size(12.0)
+                                    .style(iced::theme::Text::Color(Color::WHITE)),
+                                Space::with_width(6),
+                                text("Deselect All").size(12),
+                            ]
+                            .spacing(0)
+                            .align_items(Alignment::Center)
+                        )
+                        .style(iced::theme::Button::Custom(Box::new(
+                            SecondaryButtonStyle { mode: theme_mode }
+                        )))
+                        .on_press_maybe(if selected_count == 0 {
+                            None
+                        } else {
+                            Some(Message::DeselectAllSongs)
+                        })
+                        .padding([6, 12]),
+                    ]
+                    .spacing(0)
+                    .align_items(Alignment::Center)
+                    .width(Length::Fill),
+                )
+                .width(Length::Fill)
+                .padding([10, 12])
+                .style(iced::theme::Container::Custom(Box::new(HeaderStyle {
+                    mode: theme_mode,
+                })));
+
+                // Scrollable song list
+                let mut songs_list = Column::new().spacing(4).width(Length::Fill);
 
                 for (index, song) in downloader.search_results.iter().enumerate() {
                     let is_selected = downloader.selected_songs.contains(&index);
@@ -1328,18 +1402,27 @@ fn build_music_downloader(state: &AppState, theme_mode: ThemeMode) -> Element<'_
                         mode: theme_mode,
                     })));
 
-                    songs_column = songs_column.push(song_item);
+                    songs_list = songs_list.push(song_item);
                 }
 
-                container(
-                    scrollable(container(songs_column).width(Length::Fill).padding([8, 10]))
-                        .height(Length::Fill),
-                )
+                column![
+                    container(songs_header).width(Length::Fill).style(
+                        iced::theme::Container::Custom(Box::new(CardStyle { mode: theme_mode }))
+                    ),
+                    Space::with_height(8),
+                    container(
+                        scrollable(container(songs_list).width(Length::Fill).padding([8, 10]))
+                            .height(Length::Fill)
+                    )
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(iced::theme::Container::Custom(Box::new(CardStyle {
+                        mode: theme_mode,
+                    }))),
+                ]
+                .spacing(0)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .style(iced::theme::Container::Custom(Box::new(CardStyle {
-                    mode: theme_mode,
-                })))
                 .into()
             }
         } else {
@@ -1392,24 +1475,21 @@ fn build_music_downloader(state: &AppState, theme_mode: ThemeMode) -> Element<'_
                 .center_y()
                 .into()
             } else if downloader.filtered_artists.is_empty() {
-                let (title, subtitle, show_button) =
-                    if downloader.all_artists.is_empty() && !downloader.loading_artists {
-                        (
-                            "No artists loaded",
-                            "Click the button below to load artists",
-                            true,
-                        )
-                    } else if downloader.loading_artists {
-                        ("Loading artists...", "Please wait", false)
-                    } else if !downloader.artist_search_query.trim().is_empty() {
-                        ("No artists found", "Try a different search term", false)
-                    } else {
-                        (
-                            "No artists available",
-                            "Please wait for artists to load",
-                            false,
-                        )
-                    };
+                let (title, subtitle, show_button) = if downloader.all_artists.is_empty() {
+                    (
+                        "No artists loaded",
+                        "Click the button below to load artists",
+                        true,
+                    )
+                } else if !downloader.artist_search_query.trim().is_empty() {
+                    ("No artists found", "Try a different search term", false)
+                } else {
+                    (
+                        "No artists available",
+                        "Please wait for artists to load",
+                        false,
+                    )
+                };
 
                 let mut content =
                     column![
@@ -1606,28 +1686,6 @@ fn build_music_downloader(state: &AppState, theme_mode: ThemeMode) -> Element<'_
                 .width(Length::Fill),
                 Space::with_height(8),
                 container(
-                    text(if let Some(ref path) = downloader.download_path {
-                        format!("Download to: {}", path.display())
-                    } else {
-                        "No download directory selected".to_string()
-                    })
-                    .size(11)
-                    .style(iced::theme::Text::Color(
-                        if downloader.download_path.is_some() {
-                            colors.success
-                        } else {
-                            colors.text_disabled
-                        }
-                    ))
-                    .width(Length::Fill)
-                )
-                .width(Length::Fill)
-                .padding([8, 10])
-                .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
-                    mode: theme_mode
-                }))),
-                Space::with_height(8),
-                container(
                     text(&downloader.status)
                         .size(12)
                         .style(iced::theme::Text::Color(
@@ -1635,8 +1693,20 @@ fn build_music_downloader(state: &AppState, theme_mode: ThemeMode) -> Element<'_
                                 || downloader.status.contains("Failed")
                             {
                                 colors.error
-                            } else if downloader.status.contains("Success") {
+                            } else if downloader.status.contains("Success")
+                                || downloader.status.contains("Found")
+                                || downloader.status.contains("Loaded")
+                            {
                                 colors.success
+                            } else if downloader.status.contains("Please select")
+                                || downloader.status.contains("No download")
+                                || downloader.status.contains("No songs selected")
+                            {
+                                colors.warning
+                            } else if downloader.status.contains("Loading")
+                                || downloader.status.contains("Downloading")
+                            {
+                                colors.info
                             } else {
                                 colors.text_secondary
                             }
@@ -1679,13 +1749,20 @@ fn build_music_downloader(state: &AppState, theme_mode: ThemeMode) -> Element<'_
         })))
     };
 
-    column![
-        header,
-        Space::with_height(8),
-        container(search_section)
-            .width(Length::Fill)
-            .padding([0, 12, 0, 12]),
-        Space::with_height(12),
+    let mut main_column = column![header, Space::with_height(8),]
+        .spacing(0)
+        .width(Length::Fill);
+
+    if downloader.selected_artist.is_none() {
+        main_column = main_column.push(
+            container(search_section)
+                .width(Length::Fill)
+                .padding([0, 12, 0, 12]),
+        );
+        main_column = main_column.push(Space::with_height(12));
+    }
+
+    main_column = main_column.push(
         row![container(main_content)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -1693,15 +1770,19 @@ fn build_music_downloader(state: &AppState, theme_mode: ThemeMode) -> Element<'_
         .spacing(0)
         .width(Length::Fill)
         .height(Length::Fill),
-        Space::with_height(12),
+    );
+    main_column = main_column.push(Space::with_height(12));
+    main_column = main_column.push(
         container(actions_section)
             .width(Length::Fill)
             .padding([0, 12, 12, 12]),
-    ]
-    .spacing(0)
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
+    );
+
+    main_column
+        .spacing(0)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
 }
 
 // ============== AUDIO CONVERTER (PLACEHOLDER) ==============

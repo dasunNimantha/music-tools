@@ -20,12 +20,14 @@ pub fn select_files() -> Option<Vec<PathBuf>> {
         .pick_files()
 }
 
-pub async fn select_folder_dialog() -> Option<PathBuf> {
-    let folder = AsyncFileDialog::new()
-        .set_directory(std::env::current_dir().unwrap_or_default())
-        .pick_folder()
-        .await;
-
+pub async fn select_folder_dialog(initial_path: Option<PathBuf>) -> Option<PathBuf> {
+    let mut dialog = AsyncFileDialog::new();
+    if let Some(path) = initial_path {
+        dialog = dialog.set_directory(&path);
+    } else {
+        dialog = dialog.set_directory(std::env::current_dir().unwrap_or_default());
+    }
+    let folder = dialog.pick_folder().await;
     folder.map(|handle| handle.path().to_path_buf())
 }
 

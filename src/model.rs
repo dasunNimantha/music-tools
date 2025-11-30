@@ -43,6 +43,7 @@ pub struct AppState {
     pub scan_delay_ticks: u32,
     pub selected_file_index: Option<usize>,
     pub file_metadata: HashMap<usize, FileMetadata>,
+    pub last_metadata_folder: Option<PathBuf>,
     // Music Downloader state
     pub downloader_state: MusicDownloaderState,
     // Audio Converter state
@@ -69,6 +70,7 @@ impl Default for AppState {
             scan_delay_ticks: 0,
             selected_file_index: None,
             file_metadata: HashMap::new(),
+            last_metadata_folder: None,
             downloader_state: MusicDownloaderState::new(),
             convert_format: "MP3".to_string(),
             convert_status: "Select files to convert".to_string(),
