@@ -1,4 +1,4 @@
-use crate::file_dialog::{scan_folder_async, select_files, select_image};
+use crate::file_dialog::{scan_folder_async, select_files, select_image_async};
 use crate::message::Message;
 use crate::metadata::{process_files, read_file_metadata};
 use crate::model::{AppState, Screen};
@@ -173,11 +173,7 @@ impl Application for MusicToolsApp {
                 Command::none()
             }
             Message::SelectImage => {
-                if let Some(image_path) = select_image() {
-                    Command::perform(async move { Some(image_path) }, Message::ImageSelected)
-                } else {
-                    Command::none()
-                }
+                Command::perform(async { select_image_async().await }, Message::ImageSelected)
             }
             Message::ImageSelected(path) => {
                 self.state.album_art_path = path;
@@ -773,6 +769,7 @@ impl Application for MusicToolsApp {
                 }
                 Command::none()
             }
+            Message::NoOp => Command::none(),
         }
     }
 

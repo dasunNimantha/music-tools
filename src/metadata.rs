@@ -4,9 +4,14 @@ use lofty::picture::Picture;
 use lofty::prelude::*;
 use lofty::tag::{Tag, TagType};
 use std::fs;
+use std::panic;
 use std::path::PathBuf;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+use tokio::time::timeout;
 
-pub fn remove_all_metadata(file_path: PathBuf) -> Result<(), String> {
+fn remove_all_metadata_inner(file_path: PathBuf) -> Result<(), String> {
     match lofty::read_from_path(&file_path) {
         Ok(mut tagged_file) => {
             tagged_file.clear();
@@ -20,7 +25,45 @@ pub fn remove_all_metadata(file_path: PathBuf) -> Result<(), String> {
     }
 }
 
-pub fn set_metadata(
+pub fn remove_all_metadata(file_path: PathBuf) -> Result<(), String> {
+    let (tx, rx) = mpsc::channel();
+    let path = file_path.clone();
+
+    let handle = thread::spawn(move || {
+        let old_hook = panic::take_hook();
+        panic::set_hook(Box::new(|_| {})); // Suppress panic output
+
+        let result =
+            panic::catch_unwind(panic::AssertUnwindSafe(|| remove_all_metadata_inner(path)));
+
+        panic::set_hook(old_hook);
+
+        let _ = tx.send(result);
+    });
+
+    match rx.recv_timeout(Duration::from_secs(30)) {
+        Ok(Ok(Ok(()))) => {
+            let _ = handle.join();
+            Ok(())
+        }
+        Ok(Ok(Err(e))) => {
+            let _ = handle.join();
+            Err(e)
+        }
+        Ok(Err(_panic_info)) => {
+            let _ = handle.join();
+            // Don't try to extract panic message as it may contain invalid UTF-8
+            // Just report that the file has corrupted metadata
+            Err("File has corrupted metadata (encoding issue)".to_string())
+        }
+        Err(_) => {
+            let _ = handle.join();
+            Err("Timeout or thread communication error while processing file".to_string())
+        }
+    }
+}
+
+fn set_metadata_inner(
     file_path: PathBuf,
     artist: String,
     album: String,
@@ -100,6 +143,63 @@ pub fn set_metadata(
     }
 }
 
+pub fn set_metadata(
+    file_path: PathBuf,
+    artist: String,
+    album: String,
+    genre: Option<String>,
+    year: Option<u32>,
+    album_art: Option<PathBuf>,
+) -> Result<(), String> {
+    let (tx, rx) = mpsc::channel();
+    let path = file_path.clone();
+    let artist_clone = artist.clone();
+    let album_clone = album.clone();
+    let genre_clone = genre.clone();
+    let art_clone = album_art.clone();
+
+    let handle = thread::spawn(move || {
+        let old_hook = panic::take_hook();
+        panic::set_hook(Box::new(|_| {})); // Suppress panic output
+
+        let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+            set_metadata_inner(
+                path,
+                artist_clone,
+                album_clone,
+                genre_clone,
+                year,
+                art_clone,
+            )
+        }));
+
+        panic::set_hook(old_hook);
+
+        let _ = tx.send(result);
+    });
+
+    match rx.recv_timeout(Duration::from_secs(30)) {
+        Ok(Ok(Ok(()))) => {
+            let _ = handle.join();
+            Ok(())
+        }
+        Ok(Ok(Err(e))) => {
+            let _ = handle.join();
+            Err(e)
+        }
+        Ok(Err(_panic_info)) => {
+            let _ = handle.join();
+            // Don't try to extract panic message as it may contain invalid UTF-8
+            // Just report that the file has corrupted metadata
+            Err("File has corrupted metadata (encoding issue)".to_string())
+        }
+        Err(_) => {
+            let _ = handle.join();
+            Err("Timeout or thread communication error while processing file".to_string())
+        }
+    }
+}
+
 pub fn read_file_metadata(file_path: PathBuf) -> Result<FileMetadata, String> {
     match lofty::read_from_path(&file_path) {
         Ok(tagged_file) => {
@@ -142,28 +242,97 @@ pub async fn process_files(
     album_art: Option<PathBuf>,
 ) -> Result<Vec<String>, String> {
     let mut errors = Vec::new();
+    const FILE_TIMEOUT: Duration = Duration::from_secs(30);
 
     for file_path in files {
-        if let Err(e) = remove_all_metadata(file_path.clone()) {
-            errors.push(format!("{}: {}", file_path.display(), e));
-            continue;
+        let file_display = file_path.display().to_string();
+
+        // Process remove_all_metadata with timeout
+        let remove_result = timeout(
+            FILE_TIMEOUT,
+            tokio::task::spawn_blocking({
+                let path = file_path.clone();
+                move || remove_all_metadata(path)
+            }),
+        )
+        .await;
+
+        match remove_result {
+            Ok(Ok(Ok(()))) => {}
+            Ok(Ok(Err(e))) => {
+                errors.push(format!("{}: {}", file_display, e));
+                continue;
+            }
+            Ok(Err(e)) => {
+                let error_msg = if e.is_panic() {
+                    format!(
+                        "{}: Processing failed due to encoding/metadata corruption issue",
+                        file_display
+                    )
+                } else {
+                    format!("{}: Task error: {}", file_display, e)
+                };
+                errors.push(error_msg);
+                continue;
+            }
+            Err(_) => {
+                errors.push(format!(
+                    "{}: Timeout while removing metadata (exceeded {}s)",
+                    file_display,
+                    FILE_TIMEOUT.as_secs()
+                ));
+                continue;
+            }
         }
 
-        if let Err(e) = set_metadata(
-            file_path.clone(),
-            artist.clone(),
-            album.clone(),
-            genre.clone(),
-            year,
-            album_art.clone(),
-        ) {
-            errors.push(format!("{}: {}", file_path.display(), e));
+        // Process set_metadata with timeout
+        let set_result = timeout(
+            FILE_TIMEOUT,
+            tokio::task::spawn_blocking({
+                let path = file_path.clone();
+                let artist_clone = artist.clone();
+                let album_clone = album.clone();
+                let genre_clone = genre.clone();
+                let art_clone = album_art.clone();
+                move || {
+                    set_metadata(
+                        path,
+                        artist_clone,
+                        album_clone,
+                        genre_clone,
+                        year,
+                        art_clone,
+                    )
+                }
+            }),
+        )
+        .await;
+
+        match set_result {
+            Ok(Ok(Ok(()))) => {}
+            Ok(Ok(Err(e))) => {
+                errors.push(format!("{}: {}", file_display, e));
+            }
+            Ok(Err(e)) => {
+                let error_msg = if e.is_panic() {
+                    format!(
+                        "{}: Processing failed due to encoding/metadata corruption issue",
+                        file_display
+                    )
+                } else {
+                    format!("{}: Task error: {}", file_display, e)
+                };
+                errors.push(error_msg);
+            }
+            Err(_) => {
+                errors.push(format!(
+                    "{}: Timeout while setting metadata (exceeded {}s)",
+                    file_display,
+                    FILE_TIMEOUT.as_secs()
+                ));
+            }
         }
     }
 
-    if errors.is_empty() {
-        Ok(vec![])
-    } else {
-        Err(errors.join("\n"))
-    }
+    Ok(errors)
 }

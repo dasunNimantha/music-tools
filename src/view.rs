@@ -860,7 +860,7 @@ fn build_metadata_panel(state: &AppState, theme_mode: ThemeMode) -> Element<'sta
 
     // Build status/log section
     let status_content: Element<Message> = if !state.error_logs.is_empty() {
-        // Show scrollable error logs
+        // Show all error logs (no scrolling needed)
         let mut log_column = Column::new().spacing(4);
         for error in &state.error_logs {
             let error_text = error.clone();
@@ -871,15 +871,12 @@ fn build_metadata_panel(state: &AppState, theme_mode: ThemeMode) -> Element<'sta
             );
         }
 
-        container(
-            scrollable(container(log_column).width(Length::Fill).padding([8, 10]))
-                .height(Length::Fixed(120.0)),
-        )
-        .width(Length::Fill)
-        .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
-            mode: theme_mode,
-        })))
-        .into()
+        container(container(log_column).width(Length::Fill).padding([8, 10]))
+            .width(Length::Fill)
+            .style(iced::theme::Container::Custom(Box::new(FileItemStyle {
+                mode: theme_mode,
+            })))
+            .into()
     } else {
         // Show single status line with icon
         let (icon, text_color, status_text) =
@@ -1101,12 +1098,22 @@ fn build_edit_panel(state: &AppState, theme_mode: ThemeMode) -> Element<'static,
             .width(Length::Fill),
             Space::with_height(6),
             container(
-                text(if let Some(ref path) = state.album_art_path {
-                    path.file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("Image selected")
-                } else {
-                    "No image selected"
+                text({
+                    if let Some(ref path) = state.album_art_path {
+                        let filename = path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("Image selected");
+                        // Truncate long filenames (max 40 chars, show ... if truncated)
+                        if filename.chars().count() > 40 {
+                            let truncated: String = filename.chars().take(37).collect();
+                            format!("{}...", truncated)
+                        } else {
+                            filename.to_string()
+                        }
+                    } else {
+                        "No image selected".to_string()
+                    }
                 })
                 .size(11)
                 .style(iced::theme::Text::Color(

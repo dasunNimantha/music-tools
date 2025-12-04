@@ -57,4 +57,7 @@ pub enum Message {
 
     // Animation
     Tick(Instant),
+
+    // No-op (for read-only inputs)
+    NoOp,
 }
