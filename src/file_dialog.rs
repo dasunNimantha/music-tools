@@ -3,11 +3,14 @@ use rfd::{AsyncFileDialog, FileDialog};
 use std::path::PathBuf;
 use walkdir::WalkDir;
 
-pub fn select_image() -> Option<PathBuf> {
-    FileDialog::new()
-        .add_filter("Image Files", &["jpg", "jpeg", "png", "bmp", "gif", "webp"])
-        .set_directory(std::env::current_dir().unwrap_or_default())
-        .pick_file()
+pub async fn select_image_async() -> Option<PathBuf> {
+    let mut dialog = AsyncFileDialog::new()
+        .add_filter("Image Files", &["jpg", "jpeg", "png", "bmp", "gif", "webp"]);
+
+    dialog = dialog.set_directory(std::env::current_dir().unwrap_or_default());
+
+    let file = dialog.pick_file().await;
+    file.map(|handle| handle.path().to_path_buf())
 }
 
 pub fn select_files() -> Option<Vec<PathBuf>> {
