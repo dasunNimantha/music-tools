@@ -1,3 +1,5 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 use iced::{Application, Font, Pixels, Settings};
 use music_tools::config::window;
 use music_tools::utils::audio_player;
